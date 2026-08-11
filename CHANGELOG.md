@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-08-11
+- Add Increase/Decrease/Reset Subtitle Delay to the subtitle menu, with a HUD showing the current delay; the chosen delay is remembered per file and reapplied when it's reopened
+
 ## [0.3.1] - 2026-08-07
 - Remove the "Owl" text from the main window's title bar
 - Give video and folder rows in the browser the same height, and add a video icon to video entries
