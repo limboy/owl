@@ -256,6 +256,8 @@ final class MPVPlayerEngine: @unchecked Sendable {
                     state.isMuted = flag
                 case "speed" where valueType == MVP_MPV_VALUE_DOUBLE:
                     state.speed = number
+                case "sub-delay" where valueType == MVP_MPV_VALUE_DOUBLE:
+                    state.subtitleDelay = number
                 default:
                     break
                 }
@@ -435,6 +437,10 @@ final class MPVPlayerEngine: @unchecked Sendable {
 
     func setSubtitle(id: Int64?) {
         command(["set", "sid", id.map(String.init) ?? "no"])
+    }
+
+    func setSubtitleDelay(_ seconds: Double) {
+        setDouble(property: "sub-delay", value: seconds)
     }
 
     func setAudio(id: Int64?) {

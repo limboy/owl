@@ -53,6 +53,15 @@ final class PlayerState: ObservableObject {
     @Published var duration: Double = 0
     @Published var volume: Double = 100
     @Published var speed: Double = 1
+    /// Seconds subtitles are shifted relative to the video, positive meaning
+    /// subtitles show later. Mirrors mpv's `sub-delay`.
+    @Published var subtitleDelay: Double = 0
+    /// Bumped every time the subtitle delay menu changes `subtitleDelay`,
+    /// even when the new value equals the old one (e.g. Reset at 0). A view
+    /// wanting to flash a "delay changed" indicator on every such action —
+    /// not only when the number actually moves — observes this instead of
+    /// `subtitleDelay` itself.
+    @Published var subtitleDelayRevision = 0
     @Published var currentURL: URL?
     @Published var subtitles: [SubtitleTrack] = []
     @Published var audioTracks: [AudioTrack] = []

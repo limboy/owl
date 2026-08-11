@@ -22,6 +22,8 @@ struct PlayerContainerView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var errorDismissTask: Task<Void, Never>?
     @State private var isCursorHidden = false
+    @State private var subtitleDelayIndicatorVisible = false
+    @State private var subtitleDelayDismissTask: Task<Void, Never>?
 
     init(
         appModel: AppModel,
@@ -89,6 +91,12 @@ struct PlayerContainerView: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
 
+            if subtitleDelayIndicatorVisible {
+                subtitleDelayIndicator
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+
             VStack {
                 if let error = state.errorMessage {
                     errorBanner(error)
@@ -119,6 +127,7 @@ struct PlayerContainerView: View {
             .animation(.easeOut(duration: 0.18), value: controlsVisible)
             .animation(.easeOut(duration: 0.18), value: state.hasMedia)
             .animation(.easeOut(duration: 0.18), value: state.errorMessage)
+            .animation(.easeOut(duration: 0.18), value: subtitleDelayIndicatorVisible)
         }
         .onContinuousHover { phase in
             switch phase {
@@ -139,6 +148,9 @@ struct PlayerContainerView: View {
         .onChange(of: state.errorMessage) { _, message in
             scheduleErrorDismiss(for: message)
         }
+        .onChange(of: state.subtitleDelayRevision) { _, _ in
+            showSubtitleDelayIndicator()
+        }
         .onChange(of: controlsVisible) { _, visible in
             updateCursorVisibility(controlsVisible: visible)
         }
@@ -148,6 +160,7 @@ struct PlayerContainerView: View {
         .onDisappear {
             hideTask?.cancel()
             errorDismissTask?.cancel()
+            subtitleDelayDismissTask?.cancel()
             showCursorIfHidden()
         }
         .background {
@@ -210,6 +223,35 @@ struct PlayerContainerView: View {
             try? await Task.sleep(for: .seconds(6))
             guard !Task.isCancelled, state.errorMessage == message else { return }
             state.errorMessage = nil
+        }
+    }
+
+    private var subtitleDelayIndicator: some View {
+        Text("Subtitle Delay: \(subtitleDelayLabel(state.subtitleDelay))")
+            .font(.system(size: 20, weight: .semibold))
+            .monospacedDigit()
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func subtitleDelayLabel(_ seconds: Double) -> String {
+        let milliseconds = Int((seconds * 1000).rounded())
+        guard milliseconds != 0 else { return "0 ms" }
+        return milliseconds > 0 ? "+\(milliseconds) ms" : "\(milliseconds) ms"
+    }
+
+    /// Shows the subtitle delay HUD and takes it away again after a beat, the
+    /// same shape as `scheduleErrorDismiss`: cancel whatever timer is
+    /// pending, so a burst of menu clicks keeps the HUD up rather than having
+    /// it flicker off between them, then restart the clock.
+    private func showSubtitleDelayIndicator() {
+        subtitleDelayDismissTask?.cancel()
+        subtitleDelayIndicatorVisible = true
+        subtitleDelayDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else { return }
+            subtitleDelayIndicatorVisible = false
         }
     }
 
@@ -525,6 +567,8 @@ private struct PlayerControlsView: View {
         return "\(text)x"
     }
 
+    private static let subtitleDelayStep: Double = 0.25
+
     private var subtitleMenu: some View {
         Menu {
             trackToggle("Off", selected: state.selectedSubtitleID == nil) {
@@ -548,6 +592,17 @@ private struct PlayerControlsView: View {
                 chooseSubtitle()
             }
             Toggle("Show Subtitles Automatically", isOn: $subtitlesEnabledByDefault)
+
+            Divider()
+            Button("Increase Subtitle Delay") {
+                appModel.changeSubtitleDelay(by: Self.subtitleDelayStep)
+            }
+            Button("Decrease Subtitle Delay") {
+                appModel.changeSubtitleDelay(by: -Self.subtitleDelayStep)
+            }
+            Button("Reset Subtitle Delay") {
+                appModel.resetSubtitleDelay()
+            }
         } label: {
             Image(systemName: "captions.bubble")
                 .frame(width: 22, height: 22)

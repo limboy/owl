@@ -400,6 +400,7 @@ MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
     // file, and in that mode `end-file` is not a reliable signal of natural
     // end-of-playback; `eof-reached` is what the player itself flips.
     player->observe_property(player->handle, 8, "eof-reached", MPV_FORMAT_FLAG);
+    player->observe_property(player->handle, 9, "sub-delay", MPV_FORMAT_DOUBLE);
 
     write_error(error_buffer, error_buffer_size, "");
     return player;

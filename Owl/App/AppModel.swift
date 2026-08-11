@@ -12,6 +12,7 @@ final class AppModel: ObservableObject {
 
     let playbackQueue: PlaybackQueue
     let progressStore: PlaybackProgressStore
+    let subtitleDelayStore: SubtitleDelayStore
 
     @Published private(set) var engine: MPVPlayerEngine?
     @Published private(set) var videoView: OwlVideoView?
@@ -39,11 +40,13 @@ final class AppModel: ObservableObject {
     init(
         folderLibrary: FolderLibrary?,
         playbackQueue: PlaybackQueue = PlaybackQueue(),
-        progressStore: PlaybackProgressStore = .shared
+        progressStore: PlaybackProgressStore = .shared,
+        subtitleDelayStore: SubtitleDelayStore = .shared
     ) {
         self.folderLibrary = folderLibrary
         self.playbackQueue = playbackQueue
         self.progressStore = progressStore
+        self.subtitleDelayStore = subtitleDelayStore
 
         folderLibrary?.onVisibleVideosChanged = { [weak self] directory, videos in
             guard let self else { return }
@@ -65,6 +68,9 @@ final class AppModel: ObservableObject {
             let engine = try MPVPlayerEngine(state: playerState)
             engine.onPlaybackEnded = { [weak self] generation in
                 self?.advanceAfterEnd(generation: generation)
+            }
+            engine.onFileLoaded = { [weak self] in
+                self?.applyStoredSubtitleDelay()
             }
             self.engine = engine
             let videoView = OwlVideoView(engine: engine)
@@ -162,6 +168,39 @@ final class AppModel: ObservableObject {
 
     func changeSpeed(by amount: Double) {
         engine?.setSpeed(playerState.speed + amount)
+    }
+
+    /// Applies immediately to `playerState` rather than waiting on mpv's own
+    /// report of the property, so an indicator watching `subtitleDelay` has
+    /// the right number the instant the menu action fires; the eventual mpv
+    /// event just confirms the same value.
+    func changeSubtitleDelay(by seconds: Double) {
+        playerState.subtitleDelay += seconds
+        playerState.subtitleDelayRevision += 1
+        engine?.setSubtitleDelay(playerState.subtitleDelay)
+        rememberSubtitleDelay()
+    }
+
+    func resetSubtitleDelay() {
+        playerState.subtitleDelay = 0
+        playerState.subtitleDelayRevision += 1
+        engine?.setSubtitleDelay(0)
+        rememberSubtitleDelay()
+    }
+
+    private func rememberSubtitleDelay() {
+        guard let url = playerState.currentURL else { return }
+        subtitleDelayStore.record(url: url, delaySeconds: playerState.subtitleDelay)
+    }
+
+    /// Restores whatever delay was last set for the file mpv just reported
+    /// as loaded, or the default of none if nothing was ever recorded for
+    /// it. Runs on every load — including a file mpv is replaying — so a
+    /// delay left over from the previous file in this same player can never
+    /// bleed into one that never needed shifting.
+    private func applyStoredSubtitleDelay() {
+        guard let url = playerState.currentURL else { return }
+        engine?.setSubtitleDelay(subtitleDelayStore.delay(for: url) ?? 0)
     }
 
     func closeVideo() {
