@@ -80,11 +80,12 @@ struct FolderBrowserView: View {
 
                 Button(action: chooseFolders) {
                     Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 16, weight: .medium))
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
+                .offset(y: -5)
                 .help("Add Folder")
                 .accessibilityLabel("Add Folder")
             }
