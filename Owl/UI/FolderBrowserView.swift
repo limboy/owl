@@ -13,6 +13,8 @@ struct FolderBrowserView: View {
     @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
     @State private var isDropTargeted = false
     @State private var selectedRootID: UUID?
+    @State private var pendingRootSelectionID: UUID?
+    @FocusState private var isSidebarFocused: Bool
     @State private var headerOriginX: CGFloat = 0
 
     private let gridColumns = [
@@ -111,7 +113,7 @@ struct FolderBrowserView: View {
             .padding(.trailing, 48)
             .frame(height: 44)
 
-            List(selection: rootSelection) {
+            List(selection: $selectedRootID) {
                 Section("Folders") {
                     ForEach(library.roots) { root in
                         Label {
@@ -134,19 +136,14 @@ struct FolderBrowserView: View {
                 }
             }
             .listStyle(.sidebar)
-        }
-    }
-
-    private var rootSelection: Binding<UUID?> {
-        Binding(
-            get: { selectedRootID },
-            set: { rootID in
+            .focused($isSidebarFocused)
+            .onChange(of: selectedRootID) { _, rootID in
                 guard let rootID,
                       let root = library.roots.first(where: { $0.id == rootID })
                 else { return }
-                select(root)
+                navigate(to: root)
             }
-        )
+        }
     }
 
     private var itemCountText: String {
@@ -378,18 +375,34 @@ struct FolderBrowserView: View {
         }
     }
 
-    private func select(_ root: LibraryRoot) {
+    private func select(_ root: LibraryRoot, focusSidebar: Bool = false) {
         selectedRootID = root.id
-        withAnimation(.easeInOut(duration: 0.2)) {
-            if root.isAvailable {
-                library.openRoot(root)
-            } else {
-                library.goToRootList()
+        navigate(to: root)
+        if focusSidebar {
+            isSidebarFocused = true
+        }
+    }
+
+    private func navigate(to root: LibraryRoot) {
+        if root.isAvailable {
+            let currentRoot = library.navigationPath.first?.standardizedFileURL
+            guard currentRoot != root.url.standardizedFileURL || library.isAtRootList else {
+                return
             }
+            library.openRoot(root)
+        } else if !library.isAtRootList {
+            library.goToRootList()
         }
     }
 
     private func synchronizeSelection() {
+        if let pendingRootSelectionID,
+           let root = library.roots.first(where: { $0.id == pendingRootSelectionID }) {
+            self.pendingRootSelectionID = nil
+            select(root, focusSidebar: true)
+            return
+        }
+
         if let pathRoot = library.navigationPath.first,
            let root = library.roots.first(where: {
                $0.url.standardizedFileURL == pathRoot.standardizedFileURL
@@ -446,7 +459,7 @@ struct FolderBrowserView: View {
         if added,
            let addedURL = folders.first?.standardizedFileURL,
            let root = library.roots.first(where: { $0.url.standardizedFileURL == addedURL }) {
-            select(root)
+            pendingRootSelectionID = root.id
         }
 
         if let video = videos.first {
@@ -471,7 +484,7 @@ struct FolderBrowserView: View {
             else {
                 return
             }
-            select(root)
+            pendingRootSelectionID = root.id
         }
     }
 
