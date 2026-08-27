@@ -21,6 +21,10 @@ struct FolderBrowserView: View {
         GridItem(.adaptive(minimum: 180, maximum: 280), spacing: 18, alignment: .top)
     ]
 
+    private let listColumns = [
+        GridItem(.adaptive(minimum: 450, maximum: 900), spacing: 8, alignment: .topLeading)
+    ]
+
     init(appModel: AppModel, library: FolderLibrary) {
         self.appModel = appModel
         _library = ObservedObject(wrappedValue: library)
@@ -324,7 +328,7 @@ struct FolderBrowserView: View {
 
     private var list: some View {
         ScrollView {
-            LazyVStack(spacing: 2) {
+            LazyVGrid(columns: listColumns, alignment: .leading, spacing: 2) {
                 ForEach(library.entries) { entry in
                     entryListItem(entry)
                 }
@@ -363,6 +367,7 @@ struct FolderBrowserView: View {
             onToggleWatched: entry.kind == .video ? { toggleWatched(entry) } : nil,
             action: { open(entry) }
         )
+        .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
     }
 
@@ -554,8 +559,7 @@ private struct LibraryGridButton: View {
                     source: source,
                     isFolder: isFolder,
                     progress: progress,
-                    showsWatchedAffordance: showsWatchedAffordance,
-                    showsTimeLeftBadge: true
+                    showsWatchedAffordance: showsWatchedAffordance
                 )
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -632,10 +636,6 @@ private struct LibraryListButton: View {
         isCoverHovered && onToggleWatched != nil
     }
 
-    private var timeLeftText: String? {
-        isFolder ? nil : progress?.timeLeftText
-    }
-
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
@@ -676,24 +676,14 @@ private struct LibraryListButton: View {
                             .lineLimit(1)
                     }
                 }
+                
+                Spacer()
 
-                Spacer(minLength: 12)
-
-                HStack(spacing: 6) {
-                    if let timeLeftText {
-                        Text(timeLeftText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .lineLimit(1)
-                    }
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 18)
-                }
-                .layoutPriority(1)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 18)
+                    .layoutPriority(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
@@ -757,9 +747,6 @@ private struct MediaCover: View {
     let isFolder: Bool
     let progress: PlaybackProgress?
     var showsWatchedAffordance = false
-    /// Whether the remaining time belongs on the artwork. The list row prints it
-    /// beside the row's disclosure arrow instead, where there is room for text.
-    var showsTimeLeftBadge = false
 
     @State private var image: NSImage?
     @Environment(\.colorScheme) private var colorScheme
@@ -831,18 +818,6 @@ private struct MediaCover: View {
                     .frame(height: 4)
                 }
             }
-        }
-
-        if showsTimeLeftBadge, let timeLeftText = progress?.timeLeftText {
-            Text(timeLeftText)
-                .font(.caption2.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(.black.opacity(0.6), in: Capsule())
-                .padding(8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         }
 
         // The watched badge and the hover affordance are the same view in the same
