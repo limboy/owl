@@ -19,7 +19,7 @@ struct FolderBrowserView: View {
     @State private var headerOriginX: CGFloat = 0
 
     private let gridColumns = [
-        GridItem(.adaptive(minimum: 180, maximum: 280), spacing: 18, alignment: .top)
+        GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 18, alignment: .top)
     ]
 
     private let listColumns = [
@@ -661,7 +661,8 @@ private struct LibraryGridButton: View {
                     .lineLimit(1)
 
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.subheadline)
+                    .fontWeight(.regular)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
