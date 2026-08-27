@@ -34,6 +34,29 @@ final class FolderLibrary: ObservableObject {
     @Published private(set) var navigationPath: [URL] = []
     @Published private(set) var entries: [BrowserEntry] = []
     @Published private(set) var metadata: [URL: MediaMetadata] = [:]
+
+    /// What an online catalogue says the videos on screen are, for as long as
+    /// syncing is switched on. Empty when it is off, so a row falls straight
+    /// back to the file's own name and an extracted frame.
+    @Published private(set) var onlineMetadata: [URL: OnlineMetadata] = [:]
+
+    /// Whether to ask a catalogue about the folder being browsed. Persisted,
+    /// because a preference that had to be set again every launch would be
+    /// worse than no switch at all.
+    @Published var isMetadataSyncEnabled: Bool {
+        didSet {
+            guard oldValue != isMetadataSyncEnabled else { return }
+            MetadataSyncPreference.setEnabled(isMetadataSyncEnabled, defaults: defaults)
+            if isMetadataSyncEnabled {
+                syncOnlineMetadata()
+            } else {
+                onlineMetadataTask?.cancel()
+                onlineMetadataTask = nil
+                onlineMetadata = [:]
+            }
+        }
+    }
+
     @Published var selectedVideo: URL?
     @Published var errorMessage: String?
 
@@ -41,9 +64,18 @@ final class FolderLibrary: ObservableObject {
 
     private let fileManager: FileManager
     private let storageURL: URL
+    private let onlineMetadataService: OnlineMetadataService
+    private let defaults: UserDefaults
     private var watcher: FolderWatcher?
     private var refreshTask: Task<Void, Never>?
     private var metadataTasks: [URL: Task<Void, Never>] = [:]
+    private var onlineMetadataTask: Task<Void, Never>?
+
+    /// How many catalogue lookups to have out at once. Enough that a folder
+    /// fills in at a pace worth watching, few enough that opening a folder of
+    /// two hundred episodes is not two hundred simultaneous requests to a
+    /// service that is doing Owl a favour by answering at all.
+    private static let concurrentLookupLimit = 3
 
     /// What is taken for video when the system has no content type for the file,
     /// which is most of what only mpv can open. Also what the open panel and the
@@ -57,9 +89,14 @@ final class FolderLibrary: ObservableObject {
     init(
         fileManager: FileManager = .default,
         storageURL: URL? = nil,
-        startWatching: Bool = true
+        startWatching: Bool = true,
+        onlineMetadataService: OnlineMetadataService = .shared,
+        defaults: UserDefaults = .standard
     ) {
         self.fileManager = fileManager
+        self.onlineMetadataService = onlineMetadataService
+        self.defaults = defaults
+        self.isMetadataSyncEnabled = MetadataSyncPreference.isEnabled(defaults: defaults)
         if let storageURL {
             self.storageURL = storageURL
         } else {
@@ -79,7 +116,14 @@ final class FolderLibrary: ObservableObject {
 
     deinit {
         refreshTask?.cancel()
+        onlineMetadataTask?.cancel()
         metadataTasks.values.forEach { $0.cancel() }
+    }
+
+    /// Whether this build can sync at all. Without a catalogue key there is
+    /// nothing to switch on.
+    var isMetadataSyncAvailable: Bool {
+        onlineMetadataService.isAvailable
     }
 
     var currentDirectory: URL? {
@@ -184,6 +228,8 @@ final class FolderLibrary: ObservableObject {
         navigationPath = []
         entries = []
         selectedVideo = nil
+        onlineMetadataTask?.cancel()
+        onlineMetadataTask = nil
         onVisibleVideosChanged?(nil, [])
     }
 
@@ -236,6 +282,7 @@ final class FolderLibrary: ObservableObject {
             loadMetadata(for: entries.compactMap { entry in
                 entry.kind != .folder ? entry.url : nil
             })
+            syncOnlineMetadata()
 
             if let selectedVideo, !entries.contains(where: { $0.url == selectedVideo }) {
                 self.selectedVideo = nil
@@ -250,6 +297,56 @@ final class FolderLibrary: ObservableObject {
 
     func metadata(for url: URL) -> MediaMetadata? {
         metadata[url.standardizedFileURL]
+    }
+
+    func onlineMetadata(for url: URL) -> OnlineMetadata? {
+        onlineMetadata[url.standardizedFileURL]
+    }
+
+    /// Looks up whatever is on screen and has not been looked up yet.
+    ///
+    /// One task for the whole folder rather than one per file: leaving the
+    /// folder cancels the lookups for it in a single stroke, and the group
+    /// inside keeps only a few requests out at a time however long the folder
+    /// is. Answers are applied as they arrive, so the rows fill in one by one
+    /// rather than all at the end.
+    private func syncOnlineMetadata() {
+        onlineMetadataTask?.cancel()
+        onlineMetadataTask = nil
+        guard isMetadataSyncEnabled, onlineMetadataService.isAvailable else { return }
+
+        let pending = visibleVideos
+            .map(\.standardizedFileURL)
+            .filter { onlineMetadata[$0] == nil }
+        guard !pending.isEmpty else { return }
+
+        let service = onlineMetadataService
+        onlineMetadataTask = Task { @MainActor [weak self] in
+            await withTaskGroup(of: (URL, OnlineMetadata?).self) { group in
+                var queue = pending[...]
+
+                func addNext() {
+                    guard let url = queue.popFirst() else { return }
+                    group.addTask { (url, await service.metadata(for: url)) }
+                }
+
+                for _ in 0..<min(Self.concurrentLookupLimit, queue.count) {
+                    addNext()
+                }
+
+                for await (url, found) in group {
+                    guard !Task.isCancelled, let self else { return }
+                    if let found {
+                        self.onlineMetadata[url] = found
+                    }
+                    addNext()
+                }
+            }
+            // Deliberately not cleared here. A finished task that is still
+            // referenced costs nothing and cancelling one is a no-op, whereas
+            // clearing the field would race the next folder's task into it and
+            // leave that one with nothing holding it.
+        }
     }
 
     private func loadMetadata(for urls: [URL]) {

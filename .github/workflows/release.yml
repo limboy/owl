@@ -47,6 +47,9 @@ jobs:
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           SIGNING_IDENTITY_NAME: ${{ secrets.SIGNING_IDENTITY_NAME }}
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          # Optional: without it the shipped build simply offers no metadata
+          # sync, so a fork with no key of its own still releases.
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           bash scripts/release-ci.sh "$VERSION"

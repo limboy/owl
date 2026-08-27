@@ -150,7 +150,8 @@ xcodebuild -project Owl.xcodeproj \
   CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
   DEVELOPMENT_TEAM="$TEAM_ID" \
   MARKETING_VERSION="$VERSION" \
-  CURRENT_PROJECT_VERSION="$VERSION"
+  CURRENT_PROJECT_VERSION="$VERSION" \
+  TMDB_API_KEY="${TMDB_API_KEY:-}"
 
 # Export
 sed "s/\${APPLE_TEAM_ID}/$TEAM_ID/g" ExportOptions.plist > build/ExportOptions.plist

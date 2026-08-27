@@ -285,6 +285,18 @@ struct FolderBrowserView: View {
             }
 
             Toggle("Shuffle", isOn: $playbackQueue.isShuffled)
+
+            Divider()
+
+            Toggle("Sync Metadata", isOn: $library.isMetadataSyncEnabled)
+                .disabled(!library.isMetadataSyncAvailable)
+
+            if !library.isMetadataSyncAvailable {
+                // A plain Text is drawn as a disabled item, which is what this
+                // is: not something to pick, just the reason the switch above
+                // cannot be.
+                Text("This build has no metadata service key.")
+            }
         } label: {
             Image(systemName: "ellipsis")
         }
@@ -370,25 +382,31 @@ struct FolderBrowserView: View {
     }
 
     private func entryGridItem(_ entry: BrowserEntry) -> some View {
-        LibraryGridButton(
-            title: entry.name,
+        let online = onlineMetadata(for: entry)
+        return LibraryGridButton(
+            title: title(for: entry),
             subtitle: subtitle(for: entry),
             source: entry.kind == .folder ? .folder(entry.url) : .video(entry.url),
+            artworkPath: online?.artworkPath,
             isFolder: entry.kind == .folder,
             progress: entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil,
             isEnabled: true,
             onToggleWatched: entry.kind == .video ? { toggleWatched(entry) } : nil,
             action: { open(entry) }
         )
+        .help(helpText(for: entry, online: online))
         .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
     }
 
     private func entryListItem(_ entry: BrowserEntry) -> some View {
-        LibraryListButton(
-            title: entry.name,
-            subtitle: entry.kind == .folder ? entry.url.path : nil,
+        let online = onlineMetadata(for: entry)
+        return LibraryListButton(
+            title: title(for: entry),
+            subtitle: listSubtitle(for: entry, online: online),
             source: entry.kind == .folder ? .folder(entry.url) : .video(entry.url),
+            artworkPath: online?.artworkPath,
             isFolder: entry.kind == .folder,
+            description: online?.overview,
             progress: entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil,
             metadataText: entry.kind == .video
                 ? library.metadata(for: entry.url)?.summaryParts.joined(separator: "  ·  ")
@@ -398,7 +416,20 @@ struct FolderBrowserView: View {
             action: { open(entry) }
         )
         .frame(maxWidth: .infinity, alignment: .leading)
+        .help(helpText(for: entry, online: online))
         .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
+    }
+
+    private func onlineMetadata(for entry: BrowserEntry) -> OnlineMetadata? {
+        guard entry.kind == .video else { return nil }
+        return library.onlineMetadata(for: entry.url)
+    }
+
+    /// What the work is called, in preference to what the file is called. A
+    /// release name is a description of an encode; the catalogue's title is the
+    /// thing somebody meant to watch.
+    private func title(for entry: BrowserEntry) -> String {
+        onlineMetadata(for: entry)?.title ?? entry.name
     }
 
     private func subtitle(for entry: BrowserEntry) -> String {
@@ -406,8 +437,32 @@ struct FolderBrowserView: View {
         case .folder:
             return "Folder"
         case .video:
-            return library.metadata(for: entry.url)?.summaryParts.first ?? entry.url.pathExtension.uppercased()
+            // A card is one line wide, so the series and episode — the thing
+            // that tells one row from the next — comes before the summary.
+            if let online = onlineMetadata(for: entry) {
+                return online.subtitleLine ?? online.overview ?? entry.name
+            }
+            return library.metadata(for: entry.url)?.summaryParts.first
+                ?? entry.url.pathExtension.uppercased()
         }
+    }
+
+    /// The line under a row's title: a folder's location as before, and for a
+    /// matched video the series and episode, or the year for a film. The
+    /// description gets a line of its own below this one.
+    private func listSubtitle(for entry: BrowserEntry, online: OnlineMetadata?) -> String? {
+        if entry.kind == .folder {
+            return entry.url.path
+        }
+        return online?.subtitleLine
+    }
+
+    /// The full description, which neither layout has room to show whole.
+    private func helpText(for entry: BrowserEntry, online: OnlineMetadata?) -> String {
+        guard let online else { return entry.name }
+        return [online.subtitleLine, online.overview]
+            .compactMap { $0 }
+            .joined(separator: "\n")
     }
 
     private func select(_ root: LibraryRoot, focusSidebar: Bool = false) {
@@ -558,6 +613,7 @@ private struct LibraryGridButton: View {
     let title: String
     let subtitle: String
     let source: CoverSource
+    let artworkPath: String?
     let isFolder: Bool
     let progress: PlaybackProgress?
     let isEnabled: Bool
@@ -587,6 +643,7 @@ private struct LibraryGridButton: View {
             VStack(alignment: .leading, spacing: 4) {
                 MediaCover(
                     source: source,
+                    artworkPath: artworkPath,
                     isFolder: isFolder,
                     progress: progress,
                     showsWatchedAffordance: showsWatchedAffordance
@@ -641,7 +698,14 @@ private struct LibraryListButton: View {
     let title: String
     let subtitle: String?
     let source: CoverSource
+    let artworkPath: String?
     let isFolder: Bool
+
+    /// What the catalogue says the video is about, when anything does. Given a
+    /// line of its own rather than folded into the subtitle, so a row that has
+    /// no description stays exactly the height it always was.
+    let description: String?
+
     let progress: PlaybackProgress?
     let metadataText: String?
     let isEnabled: Bool
@@ -671,11 +735,12 @@ private struct LibraryListButton: View {
             HStack(spacing: 14) {
                 MediaCover(
                     source: source,
+                    artworkPath: artworkPath,
                     isFolder: isFolder,
                     progress: progress,
                     showsWatchedAffordance: showsWatchedAffordance
                 )
-                    .frame(width: 112, height: 64)
+                    .frame(width: 140, height: 80)
                     .clipShape(RoundedRectangle(cornerRadius: 7))
                     .overlay {
                         RoundedRectangle(cornerRadius: 7)
@@ -687,24 +752,35 @@ private struct LibraryListButton: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.headline)
+                        .font(.title3)
+                        .fontWeight(.semibold)
                         .foregroundStyle(isEnabled ? .primary : .secondary)
                         .lineLimit(1)
                     if let subtitle {
                         Text(subtitle)
-                            .font(.caption)
+                            .font(.title3)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
 
-                    if let metadataText, !metadataText.isEmpty {
-                        Text(metadataText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .lineLimit(1)
+                    if let description, !description.isEmpty {
+                        Text(description)
+                            .font(.headline)
+                            .fontWeight(.regular)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                    } else {
+                        if let metadataText, !metadataText.isEmpty {
+                            Text(metadataText)
+                                .font(.headline)
+                                .fontWeight(.regular)
+                                .foregroundStyle(.primary)
+                                .monospacedDigit()
+                                .lineLimit(1)
+                        }
                     }
+
                 }
                 
                 Spacer()
@@ -774,12 +850,27 @@ private struct LibraryItemButtonStyle: ButtonStyle {
 
 private struct MediaCover: View {
     let source: CoverSource
+
+    /// The catalogue's artwork for this video, when it has been matched to
+    /// one. Preferred over a frame out of the file: it is the picture chosen
+    /// to represent the work, where an extracted frame is whatever happened to
+    /// be on screen ten seconds in.
+    var artworkPath: String?
+
     let isFolder: Bool
     let progress: PlaybackProgress?
     var showsWatchedAffordance = false
 
     @State private var image: NSImage?
     @Environment(\.colorScheme) private var colorScheme
+
+    /// What a cover is being drawn for. Both parts matter: artwork arrives
+    /// after the row is already showing an extracted frame, and the task has to
+    /// run again when it does.
+    private struct Request: Equatable {
+        var source: CoverSource
+        var artworkPath: String?
+    }
 
     var body: some View {
         ZStack {
@@ -815,8 +906,10 @@ private struct MediaCover: View {
         }
         .clipped()
         .accessibilityValue(playbackAccessibilityValue)
-        .task(id: source) {
-            image = await loadImage()
+        .task(id: Request(source: source, artworkPath: artworkPath)) {
+            guard let loaded = await loadImage() else { return }
+            guard !Task.isCancelled else { return }
+            image = loaded
         }
     }
 
@@ -883,6 +976,12 @@ private struct MediaCover: View {
     }
 
     private func loadImage() async -> NSImage? {
+        if let artworkPath,
+           let artwork = await OnlineArtworkProvider.shared.image(forArtworkPath: artworkPath) {
+            return artwork
+        }
+        guard !Task.isCancelled else { return nil }
+
         let videoURL: URL?
         switch source {
         case .video(let url):

@@ -45,6 +45,13 @@ targets:
   Owl:
     type: application
     platform: macOS
+    # Carries TMDB_API_KEY, the metadata service key baked into the bundle.
+    # It lives in an xcconfig rather than here because a target build setting
+    # would override the file, and because the key is a secret this file is
+    # not. See Owl/Support/Owl.xcconfig.
+    configFiles:
+      Debug: Owl/Support/Owl.xcconfig
+      Release: Owl/Support/Owl.xcconfig
     sources:
       - Owl
       - path: Assets/owl.icon
@@ -61,6 +68,7 @@ targets:
         SUScheduledCheckInterval: 86400
         SUFeedURL: https://github.com/limboy/owl/releases/latest/download/appcast.xml
         SUPublicEDKey: B6+JHJ8tGYlOk0bFN5Ldnn+U40ebdkWsqWYg9nZMh0A=
+        OWLTMDBAPIKey: $(TMDB_API_KEY)
         # Lets the Finder hand video files to Owl, through Open With or by
         # dropping them on the icon. The rank is Alternate deliberately: the app
         # offers to open these, it does not claim them from whatever the Mac

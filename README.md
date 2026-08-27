@@ -37,6 +37,11 @@ library and playback progress over, move
 - Queue controls with previous, next, shuffle, repeat all, and repeat one, and
   a queue that advances on its own when a file plays to its end.
 - Playback speed presets from 0.5x to 2x.
+- Optional metadata sync, switched on per library from the browser's ellipsis
+  menu: videos are matched against The Movie Database by file name and take on
+  the work's title, description, and artwork. Off by default, and only
+  available in builds carrying an API key — see [Metadata
+  sync](#metadata-sync).
 - Full-screen playback, with the controls and the pointer both hiding after a
   moment of stillness, plus macOS Now Playing information and media-key and
   remote playback controls.
@@ -161,11 +166,65 @@ open "build/Build/Products/Release/Owl.app"
   load an external subtitle.
 - Use the audio menu to switch between embedded audio tracks.
 - Use the Playback Options (`…`) menu in the browser toolbar to configure
-  looping and shuffle.
+  looping and shuffle, and to switch metadata sync on or off.
 - Use the `1x` menu in the controls to change playback speed.
 
 Added folders are remembered and monitored for filesystem changes. The queue is
 made from the immediate video files in the folder where playback was started.
+
+## Metadata sync
+
+Owl can look up what a video is, rather than only what it contains. With
+`Sync Metadata` switched on in the browser's Playback Options (`…`) menu, the
+videos in the folder being browsed are matched against
+[The Movie Database](https://www.themoviedb.org) by file name, and a match
+replaces the row's file name with the work's title, adds its description, and
+draws its artwork in place of a frame pulled out of the file.
+
+The switch is off by default: looking a folder up means sending the names of
+the files in it to a third party, which is not something to start doing on
+somebody's behalf. Answers — including "nothing matched" — are cached on disk
+per file, so a folder that has been looked at once costs nothing to browse
+again, and the switch only affects the browser: playback, progress, and
+everything Owl reads out of the files themselves are unchanged.
+
+Matching is done on file names, so `The.Expanse.S01E02.1080p.WEB-DL.mkv` and
+`Arrival (2016).mkv` are found, while a file called `video1.mp4` is not. A file
+named only for its episode number takes the show's name from the folder holding
+it.
+
+### Supplying a key
+
+The Movie Database issues an API key per application. A build carries one baked
+into its bundle from the `TMDB_API_KEY` build setting; where there is none, the
+switch is shown disabled and everything else works as before.
+
+Put the key in `.env` and generate the local build configuration once:
+
+```sh
+echo 'TMDB_API_KEY=<your key>' >> .env
+scripts/write-local-config.sh
+```
+
+That writes `Owl/Support/Local.xcconfig`, which `Owl/Support/Owl.xcconfig`
+includes and which git ignores. Everything that builds from the working copy
+then picks the key up — a plain `xcodebuild`, the Run button in Xcode, and
+`skills/install-to-local`, which regenerates the file itself before building.
+Re-run the script after changing the key. The setting deliberately lives in an
+xcconfig rather than in `project.yml`: a target build setting would sit above
+the file and override it, and `project.yml` is committed where the key must not
+be.
+
+`scripts/release.sh` reads `TMDB_API_KEY` from `.env` and passes it to
+`xcodebuild` directly, and the release workflow reads it from the
+`TMDB_API_KEY` repository secret; both treat it as optional, so a fork with no
+key still builds and releases.
+
+`OWL_TMDB_API_KEY` overrides the bundled key at runtime, in the same way
+`OWL_LIBMPV_PATH` and its neighbours override the vendored runtime. It is read
+from the running app's environment, so putting it in `.env` has no effect —
+set it as an environment variable in the Xcode scheme, or launch the binary
+from a shell that exports it.
 
 ## Keyboard shortcuts
 

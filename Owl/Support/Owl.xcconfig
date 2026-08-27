@@ -1,0 +1,15 @@
+// Build settings that a working copy may want to set for itself.
+//
+// The one that matters is the metadata service key. It cannot live in
+// project.yml, because that is committed and the key is a secret; and a target
+// build setting would sit above this file and win, so TMDB_API_KEY is declared
+// here and nowhere else.
+//
+// Empty by default, which is the "no key" case: metadata sync is shown
+// unavailable and everything else works unchanged.
+TMDB_API_KEY =
+
+// Whatever this working copy has, if anything. Written from .env by
+// scripts/write-local-config.sh, ignored by git, and optional — the ? is what
+// lets a fresh clone build without one. Included last so it wins.
+#include? "Local.xcconfig"

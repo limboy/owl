@@ -145,6 +145,15 @@ fi
 require_command xcodebuild
 require_command ditto
 
+# Before the build, not during it: build settings are resolved when xcodebuild
+# starts, so an xcconfig written any later would not be read. Safe to run every
+# time — with no key in .env it writes an empty one, which is what a working
+# copy without a key should build.
+if [[ -x "$project_dir/scripts/write-local-config.sh" ]]; then
+  info "Writing Owl/Support/Local.xcconfig from .env"
+  "$project_dir/scripts/write-local-config.sh"
+fi
+
 if [[ "$should_generate" == true ]]; then
   require_command xcodegen
   info "Regenerating Owl.xcodeproj from project.yml"
