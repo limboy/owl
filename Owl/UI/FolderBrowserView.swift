@@ -12,6 +12,7 @@ struct FolderBrowserView: View {
     @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
     @State private var isDropTargeted = false
     @State private var selectedRootID: UUID?
+    @State private var headerOriginX: CGFloat = 0
 
     private let gridColumns = [
         GridItem(.adaptive(minimum: 180, maximum: 280), spacing: 18, alignment: .top)
@@ -33,6 +34,7 @@ struct FolderBrowserView: View {
                 .ignoresSafeArea(.container, edges: .top)
         }
         .navigationSplitViewStyle(.balanced)
+        .coordinateSpace(.named(Self.splitSpace))
         .background(Color(nsColor: .windowBackgroundColor))
         .overlay {
             if isDropTargeted {
@@ -170,6 +172,25 @@ struct FolderBrowserView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
+    /// How far into the window the window buttons and the sidebar toggle reach.
+    private static let titleBarControlsWidth: CGFloat = 156
+    private static let splitSpace = "BrowserSplit"
+
+    /// How far in the header has to start. The window hides its title bar and
+    /// the detail pane runs up under it, so whatever part of the header is not
+    /// pushed clear by the sidebar shares that strip with the window buttons
+    /// and the sidebar toggle.
+    ///
+    /// This is measured from where the pane actually sits rather than from
+    /// whether the sidebar is showing, because the visibility only flips once
+    /// the sidebar has finished moving — the title kept its old margin through
+    /// the whole animation and then jumped. Reading the pane's own leading edge
+    /// gives an inset that closes as the sidebar opens, so the title travels
+    /// with it.
+    private var headerLeadingInset: CGFloat {
+        max(24, Self.titleBarControlsWidth - headerOriginX)
+    }
+
     private var contentHeader: some View {
         HStack(spacing: 10) {
             if library.navigationPath.count > 1 {
@@ -213,9 +234,12 @@ struct FolderBrowserView: View {
             .frame(width: 76)
             .help("Choose Grid or List View")
         }
-        .padding(.leading, 24)
+        .padding(.leading, headerLeadingInset)
         .padding(.trailing, 12)
         .frame(height: 58)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.frame(in: .named(Self.splitSpace)).minX
+        } action: { headerOriginX = $0 }
     }
 
     private var detailTitle: String {
