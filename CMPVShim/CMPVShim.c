@@ -401,6 +401,15 @@ MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
     // end-of-playback; `eof-reached` is what the player itself flips.
     player->observe_property(player->handle, 8, "eof-reached", MPV_FORMAT_FLAG);
     player->observe_property(player->handle, 9, "sub-delay", MPV_FORMAT_DOUBLE);
+    // The shape of the picture as the renderer will draw it: after aspect
+    // correction and after rotation, which the plain `video-params` reports
+    // before. A window showing one file takes its own shape from this.
+    player->observe_property(
+        player->handle,
+        10,
+        "video-out-params/aspect",
+        MPV_FORMAT_DOUBLE
+    );
 
     write_error(error_buffer, error_buffer_size, "");
     return player;

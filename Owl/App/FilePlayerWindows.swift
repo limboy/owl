@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -72,16 +73,36 @@ final class FilePlayerWindows {
 private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     private static let frameAutosaveName = "FilePlayerWindowFrame"
 
+    /// The floor a window is held to before the video's shape is taken into
+    /// account: small enough to tuck a picture into a corner of the screen,
+    /// large enough for the controls laid over it.
+    private static let windowedStyleMask: NSWindow.StyleMask = [
+        .titled, .closable, .miniaturizable, .resizable
+    ]
+
+    private static let minimumContentWidth: CGFloat = 480
+    private static let minimumContentHeight: CGFloat = 270
+
     private let appModel: AppModel
     private let window: NSWindow
     private let onClose: () -> Void
+    private var cancellables = Set<AnyCancellable>()
+
+    /// The shape the window keeps outside fullscreen, once mpv has reported the
+    /// picture's, and nil until then.
+    private var videoAspectRatio: CGFloat?
+
+    /// Where the window was before fullscreen took it, for the animation out of
+    /// fullscreen to bring it back to.
+    private var frameBeforeFullScreen: NSRect?
+    private var screenBeforeFullScreen: NSScreen?
 
     init(url: URL, onClose: @escaping () -> Void) {
         appModel = AppModel(folderLibrary: nil)
         self.onClose = onClose
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 540),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: Self.windowedStyleMask,
             backing: .buffered,
             defer: false
         )
@@ -90,7 +111,10 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         window.title = url.lastPathComponent
         // Gives the title bar the file's icon, and its path under a click.
         window.representedURL = url
-        window.contentMinSize = NSSize(width: 480, height: 300)
+        window.contentMinSize = NSSize(
+            width: Self.minimumContentWidth,
+            height: Self.minimumContentHeight
+        )
         window.backgroundColor = .black
         window.isOpaque = true
         window.tabbingMode = .disallowed
@@ -110,6 +134,8 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         // The window keeps its own frame, and `contentMinSize` above the floor.
         hostingController.sizingOptions = []
         window.contentViewController = hostingController
+
+        observeVideoAspectRatio()
     }
 
     /// Sizes and places the window: where the last window of this kind was left,
@@ -137,6 +163,7 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        cancellables.removeAll()
         ActivePlayer.shared.resign(appModel)
         appModel.shutdown()
         window.delegate = nil
@@ -144,5 +171,236 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         // has just been detached from.
         window.contentViewController = nil
         onClose()
+    }
+
+    // MARK: - The video's shape
+
+    /// Shapes the window like the picture in it, and keeps it that way.
+    ///
+    /// A window that matches the video has no black margin of its own: mpv's
+    /// letterboxing then only appears where the shape of the thing showing the
+    /// picture is not the picture's own, which is fullscreen and nowhere else.
+    private func observeVideoAspectRatio() {
+        appModel.playerState.$videoAspectRatio
+            .removeDuplicates()
+            .sink { [weak self] ratio in
+                self?.applyVideoAspectRatio(ratio.map { CGFloat($0) })
+            }
+            .store(in: &cancellables)
+    }
+
+    private func applyVideoAspectRatio(_ ratio: CGFloat?) {
+        videoAspectRatio = ratio
+        guard let ratio, ratio.isFinite, ratio > 0 else {
+            clearContentAspectRatio()
+            window.contentMinSize = NSSize(
+                width: Self.minimumContentWidth,
+                height: Self.minimumContentHeight
+            )
+            return
+        }
+
+        window.contentMinSize = Self.minimumContentSize(for: ratio)
+        // Fullscreen is the screen's shape, not the video's. The constraint,
+        // and the frame that goes with it, are put back on the way out.
+        guard !window.styleMask.contains(.fullScreen) else { return }
+        window.contentAspectRatio = NSSize(width: ratio, height: 1)
+        window.setFrame(reshapedFrame(for: ratio), display: true)
+    }
+
+    /// Lets the window take any shape again.
+    ///
+    /// A ratio is dropped by asking for free resize increments rather than by
+    /// assigning a zero ratio: a zero is what AppKit stores for "unconstrained",
+    /// but assigning one leaves it dividing by it, and the next frame the window
+    /// is given comes out as nothing a window can be.
+    private func clearContentAspectRatio() {
+        window.resizeIncrements = NSSize(width: 1, height: 1)
+    }
+
+    /// The smallest window of this shape, held above both floors so that a
+    /// picture wider than it is tall is not also shorter than the controls.
+    private static func minimumContentSize(for ratio: CGFloat) -> NSSize {
+        NSSize(
+            width: max(minimumContentWidth, minimumContentHeight * ratio),
+            height: max(minimumContentHeight, minimumContentWidth / ratio)
+        )
+    }
+
+    /// The window's frame with its content reshaped to `ratio`, holding the
+    /// area it covers and the point it is centred on, and staying on screen.
+    ///
+    /// Holding the area rather than the width is what keeps a window opened on
+    /// a tall video from becoming a tall window as wide as the last one was.
+    private func reshapedFrame(for ratio: CGFloat) -> NSRect {
+        let frame = window.frame
+        // Measured against the windowed style rather than asked of the window:
+        // on the way out of fullscreen the window still answers as a fullscreen
+        // one, whose content is its whole frame, and the title bar would be
+        // counted into the picture and the window grown by its height.
+        let content = Self.contentSize(ofFrame: frame)
+        guard content.width > 0, content.height > 0 else { return frame }
+        guard abs(content.width / content.height - ratio) > 0.001 else { return frame }
+
+        var width = (content.width * content.height * ratio).squareRoot()
+        var height = width / ratio
+
+        let minimum = window.contentMinSize
+        if width < minimum.width || height < minimum.height {
+            let scale = max(minimum.width / width, minimum.height / height)
+            width *= scale
+            height *= scale
+        }
+
+        if let visible = (window.screen ?? NSScreen.main)?.visibleFrame {
+            let limit = Self.contentSize(ofFrame: visible)
+            if width > limit.width || height > limit.height {
+                let scale = min(limit.width / width, limit.height / height)
+                width *= scale
+                height *= scale
+            }
+        }
+
+        var reshaped = NSWindow.frameRect(
+            forContentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: width.rounded(),
+                height: height.rounded()
+            ),
+            styleMask: Self.windowedStyleMask
+        )
+        reshaped.origin = NSPoint(
+            x: (frame.midX - reshaped.width / 2).rounded(),
+            y: (frame.midY - reshaped.height / 2).rounded()
+        )
+        return keptOnScreen(reshaped)
+    }
+
+    private static func contentSize(ofFrame frame: NSRect) -> NSSize {
+        NSWindow.contentRect(forFrameRect: frame, styleMask: windowedStyleMask).size
+    }
+
+    private func keptOnScreen(_ frame: NSRect) -> NSRect {
+        guard let visible = (window.screen ?? NSScreen.main)?.visibleFrame else {
+            return frame
+        }
+        var frame = frame
+        frame.origin.x = min(
+            max(frame.minX, visible.minX),
+            max(visible.maxX - frame.width, visible.minX)
+        )
+        frame.origin.y = min(
+            max(frame.minY, visible.minY),
+            max(visible.maxY - frame.height, visible.minY)
+        )
+        return frame
+    }
+
+    // MARK: - Fullscreen
+    //
+    // The transition is animated here rather than left to AppKit. AppKit's own
+    // is a snapshot of the window stretched to the shape of the screen and
+    // crossfaded into the resized window, which for a window shaped like its
+    // video means the picture is the wrong shape for as long as the animation
+    // lasts and only springs back to the right one at the end of it. Animating
+    // the window's frame instead resizes the video view every step of the way,
+    // so mpv draws the picture at the shape it really is throughout, and the
+    // black bars fullscreen puts around it grow rather than appear.
+
+    func windowWillEnterFullScreen(_ notification: Notification) {
+        // A window is asked to be the size of the screen on the way in, which
+        // is a size the video's shape would otherwise refuse.
+        clearContentAspectRatio()
+        // For the length of the fullscreen session the window's content is its
+        // whole frame, with the title bar floating over the top of the picture
+        // rather than sitting above it. It buys the picture the title bar's
+        // height of screen in fullscreen, and — because AppKit measures a
+        // window on its way in and out of fullscreen by its content — it is
+        // what keeps the two animations from each landing a title bar's height
+        // away from where the window really goes.
+        window.styleMask.insert(.fullSizeContentView)
+        screenBeforeFullScreen = window.screen
+        // Read after the style change, so it is the frame AppKit will hand back
+        // on the way out and the exit animation can land exactly on it.
+        frameBeforeFullScreen = window.frame
+    }
+
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        NSLog("OWLDBG did-enter windowFrame=\(window.frame) content=\(window.contentLayoutRect) style=\(window.styleMask.rawValue)")
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        NSLog("OWLDBG did-exit before=\(window.frame) saved=\(String(describing: frameBeforeFullScreen))")
+        // Puts the title bar back above the picture, which grows the frame by
+        // its height and leaves the content — the video — where it was.
+        window.styleMask.remove(.fullSizeContentView)
+        applyVideoAspectRatio(videoAspectRatio)
+        NSLog("OWLDBG did-exit after=\(window.frame)")
+    }
+
+    func customWindowsToEnterFullScreen(for window: NSWindow) -> [NSWindow]? {
+        [window]
+    }
+
+    func window(
+        _ window: NSWindow,
+        startCustomAnimationToEnterFullScreenWithDuration duration: TimeInterval
+    ) {
+        guard let screen = screenBeforeFullScreen ?? window.screen ?? NSScreen.main else {
+            return
+        }
+        NSLog("OWLDBG enter-anim from=\(window.frame) target=\(fullScreenFrame(on: screen))")
+        animate(window, to: fullScreenFrame(on: screen), over: duration)
+    }
+
+    func customWindowsToExitFullScreen(for window: NSWindow) -> [NSWindow]? {
+        [window]
+    }
+
+    func window(
+        _ window: NSWindow,
+        startCustomAnimationToExitFullScreenWithDuration duration: TimeInterval
+    ) {
+        guard let frame = frameBeforeFullScreen else { return }
+        animate(window, to: frame, over: duration)
+    }
+
+    /// Taking the animation on means answering for the window ending up where
+    /// it was going, including when the transition is abandoned partway.
+    func windowDidFailToEnterFullScreen(_ window: NSWindow) {
+        if let frame = frameBeforeFullScreen {
+            window.setFrame(frame, display: true)
+        }
+        window.styleMask.remove(.fullSizeContentView)
+        applyVideoAspectRatio(videoAspectRatio)
+    }
+
+    func windowDidFailToExitFullScreen(_ window: NSWindow) {
+        guard let screen = screenBeforeFullScreen ?? window.screen ?? NSScreen.main else {
+            return
+        }
+        window.setFrame(fullScreenFrame(on: screen), display: true)
+    }
+
+    /// Where a fullscreen window on `screen` ends up.
+    ///
+    /// Not the whole screen: AppKit keeps a strip along the top for the title
+    /// bar it hides there, and on a display with a notch the room the notch
+    /// takes on top of that. Animating to the whole screen instead would leave
+    /// the window to be dropped down by that much the moment the animation
+    /// ended, which is the jolt the animation is here to avoid.
+    private func fullScreenFrame(on screen: NSScreen) -> NSRect {
+        var frame = screen.frame
+        frame.size.height -= screen.safeAreaInsets.top
+        return frame
+    }
+
+    private func animate(_ window: NSWindow, to frame: NSRect, over duration: TimeInterval) {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window.animator().setFrame(frame, display: true)
+        }
     }
 }

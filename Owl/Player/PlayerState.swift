@@ -63,6 +63,10 @@ final class PlayerState: ObservableObject {
     /// `subtitleDelay` itself.
     @Published var subtitleDelayRevision = 0
     @Published var currentURL: URL?
+    /// The picture's display aspect ratio — its width over its height, as it
+    /// will be drawn — or nil while there is no video to take one from.
+    /// Mirrors mpv's `video-out-params/aspect`.
+    @Published var videoAspectRatio: Double?
     @Published var subtitles: [SubtitleTrack] = []
     @Published var audioTracks: [AudioTrack] = []
     @Published var errorMessage: String?
@@ -99,6 +103,7 @@ final class PlayerState: ObservableObject {
         currentTime = 0
         duration = 0
         currentURL = nil
+        videoAspectRatio = nil
         subtitles = []
         audioTracks = []
         errorMessage = nil

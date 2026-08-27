@@ -28,6 +28,11 @@ struct FilePlayerView: View {
         .frame(minWidth: 480, minHeight: 300)
         .background(Color.black)
         .preferredColorScheme(.dark)
+        // In fullscreen the window's content is the whole screen, title bar
+        // strip included, and the picture is what belongs under it. Laid out
+        // inside the safe area instead, the video would keep a bar's worth of
+        // black above it and sit off-centre on the screen.
+        .ignoresSafeArea()
         .background {
             ActivePlayerTracker(
                 target: PlayerTarget(appModel: appModel)

@@ -258,6 +258,14 @@ final class MPVPlayerEngine: @unchecked Sendable {
                     state.speed = number
                 case "sub-delay" where valueType == MVP_MPV_VALUE_DOUBLE:
                     state.subtitleDelay = number
+                case "video-out-params/aspect":
+                    // Between files, and for one with no picture at all, mpv
+                    // reports the property as having no value rather than not
+                    // reporting it: a shape of nothing, which is nil here.
+                    let isUsable = valueType == MVP_MPV_VALUE_DOUBLE
+                        && number.isFinite
+                        && number > 0
+                    state.videoAspectRatio = isUsable ? number : nil
                 default:
                     break
                 }
