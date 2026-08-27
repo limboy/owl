@@ -16,13 +16,23 @@ final class MediaThumbnailProvider {
         case external
     }
 
+    /// How far into a file a cover frame is taken from. Far enough in to clear
+    /// a black leader or a studio logo, close enough that a short clip still
+    /// has something there.
+    static let coverSeconds = 10
+
     private let cache = NSCache<NSString, NSImage>()
     private let external: ExternalThumbnailRenderer
+    private let coverCache: CoverImageCache
     private var extractors: [String: Extractor] = [:]
     private var filmstrips: [String: ThumbnailFilmstrip] = [:]
 
-    init(external: ExternalThumbnailRenderer = ExternalThumbnailRenderer()) {
+    init(
+        external: ExternalThumbnailRenderer = ExternalThumbnailRenderer(),
+        coverCache: CoverImageCache = .shared
+    ) {
         self.external = external
+        self.coverCache = coverCache
     }
 
     /// Starts filling a filmstrip for `url` so that previews are ready before
@@ -64,6 +74,32 @@ final class MediaThumbnailProvider {
         return filmstrips[path]?.frame(at: seconds)
     }
 
+    /// The frame the browser shows for a file.
+    ///
+    /// Unlike a scrubbing frame, this is the same frame every launch for as
+    /// long as the file is untouched, so it is worth keeping on disk: the
+    /// browser can fill a folder from the cache instead of decoding, or
+    /// spawning a process for, every file in it again.
+    func coverImage(for url: URL) async -> NSImage? {
+        let seconds = Double(Self.coverSeconds)
+        let key = Self.key(path: url.standardizedFileURL.path, seconds: seconds)
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+
+        if let data = await coverCache.data(for: url, at: Self.coverSeconds),
+           let stored = NSImage(data: data) {
+            cache.setObject(stored, forKey: key)
+            return stored
+        }
+
+        guard let image = await image(for: url, at: seconds) else { return nil }
+        if let data = Self.jpegData(from: image) {
+            await coverCache.store(data, for: url, at: Self.coverSeconds)
+        }
+        return image
+    }
+
     func image(for url: URL, at seconds: Double) async -> NSImage? {
         let bucket = max(0, Int(seconds.rounded()))
         let path = url.standardizedFileURL.path
@@ -85,6 +121,17 @@ final class MediaThumbnailProvider {
         guard let image else { return nil }
         cache.setObject(image, forKey: key)
         return image
+    }
+
+    /// A cover encoded for disk. JPEG at the size these frames come back in
+    /// costs a few tens of kilobytes, where the same frame as PNG runs to a
+    /// megabyte, and a cover is shown small enough that the loss does not read.
+    private static func jpegData(from image: NSImage) -> Data? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+        return NSBitmapImageRep(cgImage: cgImage)
+            .representation(using: .jpeg, properties: [.compressionFactor: 0.8])
     }
 
     private static func key(path: String, seconds: Double) -> NSString {

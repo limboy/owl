@@ -59,6 +59,32 @@ final class MediaThumbnailProviderTests: XCTestCase {
         XCTAssertIdentical(first, second)
     }
 
+    func testACoverSurvivesWithoutTheToolThatRenderedIt() async throws {
+        let ffmpeg = try requireFFmpeg()
+        let sample = try makeSample(using: ffmpeg, pathExtension: "mkv", seconds: 12)
+        defer { try? FileManager.default.removeItem(at: sample) }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OwlCovers-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let rendering = MediaThumbnailProvider(
+            external: ExternalThumbnailRenderer(tool: .ffmpeg(ffmpeg)),
+            coverCache: CoverImageCache(directory: directory)
+        )
+        let rendered = await rendering.coverImage(for: sample)
+        XCTAssertNotNil(rendered)
+
+        // A second provider stands in for a later launch: it shares nothing in
+        // memory, and without an external tool it could not render a Matroska
+        // cover itself, so a cover here can only have come off disk.
+        let relaunched = MediaThumbnailProvider(
+            external: ExternalThumbnailRenderer(tool: nil),
+            coverCache: CoverImageCache(directory: directory)
+        )
+        let restored = await relaunched.coverImage(for: sample)
+        XCTAssertNotNil(restored)
+    }
+
     func testOnlyContainersAVFoundationClaimsAreProbed() {
         XCTAssertTrue(MediaThumbnailProvider.isAudiovisualType(URL(fileURLWithPath: "/a/clip.mp4")))
         XCTAssertTrue(MediaThumbnailProvider.isAudiovisualType(URL(fileURLWithPath: "/a/clip.MOV")))
@@ -74,7 +100,11 @@ final class MediaThumbnailProviderTests: XCTestCase {
         return ffmpeg
     }
 
-    private func makeSample(using ffmpeg: URL, pathExtension: String) throws -> URL {
+    private func makeSample(
+        using ffmpeg: URL,
+        pathExtension: String,
+        seconds: Int = 5
+    ) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("OwlThumbnailSample-\(UUID().uuidString)")
             .appendingPathExtension(pathExtension)
@@ -86,7 +116,7 @@ final class MediaThumbnailProviderTests: XCTestCase {
             "-loglevel", "error",
             "-f", "lavfi",
             "-i", "testsrc=size=320x180:rate=10",
-            "-t", "5",
+            "-t", String(seconds),
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             url.path,

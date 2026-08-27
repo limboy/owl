@@ -32,7 +32,9 @@
 		56706FE9718A5A319CF6C302 /* MPVCallbackContextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C9A0A5A5D5250649E7A1DA9 /* MPVCallbackContextTests.swift */; };
 		572323978357DDD81F2942EB /* CMPVShim.h in Headers */ = {isa = PBXBuildFile; fileRef = 433CCA26271A4B82EEA1EE86 /* CMPVShim.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		5BEE184EE142C2D70AD946E6 /* MediaThumbnailProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8C1E88E7092374764AEB3C8 /* MediaThumbnailProviderTests.swift */; };
+		5C7C757A40A2655166A5D942 /* CoverImageCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43CD0D8CDDEB6F8DC88C5BE3 /* CoverImageCacheTests.swift */; };
 		5F127852051AE9C61C927630 /* FullscreenPlayerLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA9F32EE0856EF796AC2CFB /* FullscreenPlayerLayer.swift */; };
+		645DD877C6910C1215640073 /* CoverImageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC6D1EE448FF490E72492E2 /* CoverImageCache.swift */; };
 		6D22011982BAAB39AD915448 /* FullscreenPlayerPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28ED5B96888E54F7E4C99E90 /* FullscreenPlayerPresenter.swift */; };
 		72B87347DFD4E9188C248106 /* CMPVShim.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 456156D2104CCC71E44ED064 /* CMPVShim.framework */; };
 		7B4D8B780F0E31AAE65F195B /* PlayerContainerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81840AEB2C8BA1EEE343254F /* PlayerContainerView.swift */; };
@@ -136,6 +138,7 @@
 		40633D16992B312A728DCD19 /* PlayerStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerStateTests.swift; sourceTree = "<group>"; };
 		42493D4355E2786D1631F7E6 /* ActivePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivePlayer.swift; sourceTree = "<group>"; };
 		433CCA26271A4B82EEA1EE86 /* CMPVShim.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CMPVShim.h; sourceTree = "<group>"; };
+		43CD0D8CDDEB6F8DC88C5BE3 /* CoverImageCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageCacheTests.swift; sourceTree = "<group>"; };
 		456156D2104CCC71E44ED064 /* CMPVShim.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = CMPVShim.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		4621E1B4E6785A0FE5112F63 /* MediaMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaMetadata.swift; sourceTree = "<group>"; };
 		470EC57BEEF32A6E969AFC04 /* OwlTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OwlTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -162,6 +165,7 @@
 		9E4A9FDB62392BD0AD14F244 /* DeferredVideoLoadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeferredVideoLoadTests.swift; sourceTree = "<group>"; };
 		A80EB50BD7D043D1A725AC90 /* ExternalMediaProbeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalMediaProbeTests.swift; sourceTree = "<group>"; };
 		AD5BE4F204397A6E90FE180A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		AEC6D1EE448FF490E72492E2 /* CoverImageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageCache.swift; sourceTree = "<group>"; };
 		B8C1E88E7092374764AEB3C8 /* MediaThumbnailProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaThumbnailProviderTests.swift; sourceTree = "<group>"; };
 		BB0D9DCB9D710E27DC8929AB /* SubtitlePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitlePreference.swift; sourceTree = "<group>"; };
 		BDA1F1304BD67FEF2F43DB03 /* WindowTitleHidden.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowTitleHidden.swift; sourceTree = "<group>"; };
@@ -226,6 +230,7 @@
 		35D7660818D85EC9F58BF570 /* Library */ = {
 			isa = PBXGroup;
 			children = (
+				AEC6D1EE448FF490E72492E2 /* CoverImageCache.swift */,
 				C30A33BD5231EF485304BABC /* ExternalMediaProbe.swift */,
 				3A45CF271BF51DEF146E472C /* ExternalProcess.swift */,
 				4970997FBFC0773D78E00155 /* ExternalThumbnailRenderer.swift */,
@@ -256,6 +261,7 @@
 		4EBA361E4EE12D2223230EB0 /* OwlTests */ = {
 			isa = PBXGroup;
 			children = (
+				43CD0D8CDDEB6F8DC88C5BE3 /* CoverImageCacheTests.swift */,
 				9E4A9FDB62392BD0AD14F244 /* DeferredVideoLoadTests.swift */,
 				A80EB50BD7D043D1A725AC90 /* ExternalMediaProbeTests.swift */,
 				ED791579A595AB920BF3B4C3 /* ExternalThumbnailRendererTests.swift */,
@@ -506,6 +512,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5C7C757A40A2655166A5D942 /* CoverImageCacheTests.swift in Sources */,
 				0B4249BE7FF887DA892E6660 /* DeferredVideoLoadTests.swift in Sources */,
 				87585A2B720D8EFFB0CC3D37 /* ExternalMediaProbeTests.swift in Sources */,
 				0003AF8949ED1256C3A43291 /* ExternalThumbnailRendererTests.swift in Sources */,
@@ -533,6 +540,7 @@
 				EF9A1A3765574525227002CB /* ActivePlayer.swift in Sources */,
 				98E8F19BAC5C9AF9CA6DC9E3 /* AppModel.swift in Sources */,
 				8FAC2C7638AD8EBCA9D148CB /* ContentView.swift in Sources */,
+				645DD877C6910C1215640073 /* CoverImageCache.swift in Sources */,
 				E770198A243E7BFC0E08E2BD /* ExternalMediaProbe.swift in Sources */,
 				1B75F9576440638DA950DEDE /* ExternalProcess.swift in Sources */,
 				FCA100535EB69CB1750595DA /* ExternalThumbnailRenderer.swift in Sources */,
@@ -810,7 +818,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.3.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ldl",
@@ -867,7 +875,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.3.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ldl",

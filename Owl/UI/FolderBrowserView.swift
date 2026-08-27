@@ -842,12 +842,24 @@ private struct MediaCover: View {
             videoURL = await FolderCoverFinder.firstVideo(in: url)
         }
         guard !Task.isCancelled, let videoURL else { return nil }
-        return await MediaThumbnailProvider.shared.image(for: videoURL, at: 10)
+        return await MediaThumbnailProvider.shared.coverImage(for: videoURL)
     }
 }
 
 private enum FolderCoverFinder {
+    /// The video a folder's cover comes from. The answer is remembered across
+    /// launches, because walking a deep folder to find it is slower than
+    /// extracting the frame once it has been found.
     static func firstVideo(in directory: URL) async -> URL? {
+        if let remembered = await FolderCoverIndex.shared.video(for: directory) {
+            return remembered
+        }
+        guard !Task.isCancelled, let found = await scan(directory) else { return nil }
+        await FolderCoverIndex.shared.setVideo(found, for: directory)
+        return found
+    }
+
+    private static func scan(_ directory: URL) async -> URL? {
         await Task.detached(priority: .utility) {
             let keys: Set<URLResourceKey> = [.isDirectoryKey, .isRegularFileKey, .isHiddenKey]
             guard let enumerator = FileManager.default.enumerator(
