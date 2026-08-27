@@ -221,6 +221,11 @@ final class AppModel: ObservableObject {
         progressStore.progress(for: url)
     }
 
+    func toggleWatched(for url: URL, duration: Double?) {
+        let isWatched = progressStore.progress(for: url)?.isCompleted == true
+        progressStore.setWatched(!isWatched, url: url, duration: duration)
+    }
+
     /// Whether a file has been asked for that mpv has not been given yet,
     /// because the view it would be drawn in has not drawn once.
     var isWaitingForRenderer: Bool {

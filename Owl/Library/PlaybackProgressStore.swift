@@ -87,6 +87,36 @@ final class PlaybackProgressStore: ObservableObject {
         record(url: url, position: duration, duration: duration)
     }
 
+    func setWatched(_ isWatched: Bool, url: URL, duration: Double?) {
+        guard isWatched else {
+            remove(url: url)
+            return
+        }
+
+        let normalizedURL = url.standardizedFileURL
+        let existing = entriesByURL[normalizedURL]
+        let knownDuration = [duration, existing?.duration]
+            .compactMap { $0 }
+            .first { $0.isFinite && $0 > 0 } ?? 0
+        let value = PlaybackProgress(
+            url: normalizedURL,
+            position: knownDuration,
+            duration: knownDuration,
+            lastPlayed: Date(),
+            isCompleted: true
+        )
+
+        if let index = entries.firstIndex(where: { $0.url.standardizedFileURL == normalizedURL }) {
+            entries[index] = value
+        } else {
+            entries.append(value)
+        }
+        entries.sort { $0.lastPlayed > $1.lastPlayed }
+        entriesByURL[normalizedURL] = value
+        trimToLimit()
+        persist()
+    }
+
     func remove(url: URL) {
         entries.removeAll { $0.url.standardizedFileURL == url.standardizedFileURL }
         entriesByURL[url.standardizedFileURL] = nil

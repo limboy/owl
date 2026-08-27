@@ -296,6 +296,7 @@ struct FolderBrowserView: View {
             isFolder: entry.kind == .folder,
             progress: entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil,
             isEnabled: true,
+            onToggleWatched: entry.kind == .video ? { toggleWatched(entry) } : nil,
             action: { open(entry) }
         )
         .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
@@ -312,6 +313,7 @@ struct FolderBrowserView: View {
                 ? library.metadata(for: entry.url)?.summaryParts.joined(separator: "  ·  ")
                 : nil,
             isEnabled: true,
+            onToggleWatched: entry.kind == .video ? { toggleWatched(entry) } : nil,
             action: { open(entry) }
         )
         .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
@@ -377,6 +379,13 @@ struct FolderBrowserView: View {
                 )
             }
         }
+    }
+
+    private func toggleWatched(_ entry: BrowserEntry) {
+        appModel.toggleWatched(
+            for: entry.url,
+            duration: library.metadata(for: entry.url)?.duration
+        )
     }
 
     private func accept(_ urls: [URL]) -> Bool {
@@ -454,7 +463,10 @@ private struct LibraryGridButton: View {
     let isFolder: Bool
     let progress: PlaybackProgress?
     let isEnabled: Bool
+    let onToggleWatched: (() -> Void)?
     let action: () -> Void
+
+    @State private var isCoverHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -466,6 +478,7 @@ private struct LibraryGridButton: View {
                         RoundedRectangle(cornerRadius: 10)
                             .strokeBorder(.white.opacity(0.1))
                     }
+                    .onHover { isCoverHovered = $0 }
 
                 Text(title)
                     .font(.headline)
@@ -482,6 +495,15 @@ private struct LibraryGridButton: View {
         }
         .buttonStyle(LibraryItemButtonStyle())
         .disabled(!isEnabled)
+        .overlay(alignment: .topTrailing) {
+            if isCoverHovered, let onToggleWatched {
+                WatchedToggleButton(
+                    isWatched: progress?.isCompleted == true,
+                    action: onToggleWatched
+                )
+                .padding(8)
+            }
+        }
     }
 }
 
@@ -493,7 +515,10 @@ private struct LibraryListButton: View {
     let progress: PlaybackProgress?
     let metadataText: String?
     let isEnabled: Bool
+    let onToggleWatched: (() -> Void)?
     let action: () -> Void
+
+    @State private var isCoverHovered = false
 
     var body: some View {
         Button(action: action) {
@@ -505,6 +530,7 @@ private struct LibraryListButton: View {
                         RoundedRectangle(cornerRadius: 7)
                             .strokeBorder(.white.opacity(0.08))
                     }
+                    .onHover { isCoverHovered = $0 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -541,6 +567,44 @@ private struct LibraryListButton: View {
         }
         .buttonStyle(LibraryItemButtonStyle())
         .disabled(!isEnabled)
+        .overlay(alignment: .topLeading) {
+            if isCoverHovered, let onToggleWatched {
+                WatchedToggleButton(
+                    isWatched: progress?.isCompleted == true,
+                    action: onToggleWatched
+                )
+                .padding(8)
+                .frame(width: 112, height: 64, alignment: .topTrailing)
+                .padding(.leading, 10)
+                .padding(.top, 7)
+            }
+        }
+    }
+}
+
+private struct WatchedToggleButton: View {
+    let isWatched: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(isWatched ? Color.accentColor : .black.opacity(0.5))
+                if isWatched {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                } else {
+                    Circle()
+                        .strokeBorder(.white.opacity(0.9), lineWidth: 1.5)
+                }
+            }
+            .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.plain)
+        .help(isWatched ? "Mark as Unwatched" : "Mark as Watched")
+        .accessibilityLabel(isWatched ? "Mark as Unwatched" : "Mark as Watched")
     }
 }
 

@@ -42,6 +42,21 @@ final class PlaybackProgressStoreTests: XCTestCase {
         XCTAssertTrue(store.progress(for: video)?.isCompleted == true)
     }
 
+    func testWatchedStateCanBeToggledWithoutKnownDuration() {
+        let store = PlaybackProgressStore(
+            storageURL: temporaryDirectory.appendingPathComponent("progress.json")
+        )
+        let video = temporaryDirectory.appendingPathComponent("manual-status.mkv")
+
+        store.setWatched(true, url: video, duration: nil)
+
+        XCTAssertTrue(store.progress(for: video)?.isCompleted == true)
+
+        store.setWatched(false, url: video, duration: nil)
+
+        XCTAssertNil(store.progress(for: video))
+    }
+
     func testTheOldestEntriesFallOffOnceTheStoreIsFull() {
         let store = PlaybackProgressStore(
             storageURL: temporaryDirectory.appendingPathComponent("progress.json")
