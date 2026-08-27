@@ -8,7 +8,6 @@ import SwiftUI
 struct FilePlayerView: View {
     let url: URL
     @ObservedObject var appModel: AppModel
-    @ObservedObject var windowState: WindowState
 
     var body: some View {
         Group {
@@ -17,22 +16,8 @@ struct FilePlayerView: View {
                     appModel: appModel,
                     engine: engine,
                     videoView: videoView,
-                    windowState: windowState,
-                    isVideoSurfaceActive: !windowState.isFullscreen,
                     showsQueueControls: false
                 )
-                .onAppear {
-                    windowState.attachVideoView(videoView)
-                }
-                .background {
-                    FullscreenPlayerLayer(
-                        appModel: appModel,
-                        engine: engine,
-                        videoView: videoView,
-                        windowState: windowState,
-                        showsQueueControls: false
-                    )
-                }
             } else {
                 LibMPVSetupView(
                     errorMessage: appModel.startupError,
@@ -45,7 +30,7 @@ struct FilePlayerView: View {
         .preferredColorScheme(.dark)
         .background {
             ActivePlayerTracker(
-                target: PlayerTarget(appModel: appModel, windowState: windowState)
+                target: PlayerTarget(appModel: appModel)
             )
             .frame(width: 0, height: 0)
         }

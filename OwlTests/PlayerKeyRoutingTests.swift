@@ -7,16 +7,15 @@ import XCTest
 final class PlayerKeyRoutingTests: XCTestCase {
     func testBareKeysAreRecognisedAndModifiedOnesAreLeftAlone() {
         XCTAssertEqual(PlayerKeyRouting.key(for: keyEvent(" ")), .togglePlayPause)
-        XCTAssertEqual(PlayerKeyRouting.key(for: keyEvent("f")), .toggleFullscreen)
-        XCTAssertEqual(PlayerKeyRouting.key(for: keyEvent("F")), .toggleFullscreen)
         XCTAssertEqual(PlayerKeyRouting.key(for: arrowEvent(NSLeftArrowFunctionKey)), .seekBackward)
         XCTAssertEqual(PlayerKeyRouting.key(for: arrowEvent(NSRightArrowFunctionKey)), .seekForward)
         XCTAssertEqual(PlayerKeyRouting.key(for: arrowEvent(NSUpArrowFunctionKey)), .volumeUp)
         XCTAssertEqual(PlayerKeyRouting.key(for: arrowEvent(NSDownArrowFunctionKey)), .volumeDown)
 
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("f")))
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("F")))
         XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("g")))
-        // ⌃⌘F is the menu's, and ⌘← belongs to whatever text is being edited.
-        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("f", modifiers: [.command, .control])))
+        // ⌘← belongs to whatever text is being edited.
         XCTAssertNil(
             PlayerKeyRouting.key(for: arrowEvent(NSLeftArrowFunctionKey, modifiers: .command))
         )
@@ -40,7 +39,6 @@ final class PlayerKeyRoutingTests: XCTestCase {
         XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(.seekForward, firstResponder: table))
         XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(.seekBackward, firstResponder: table))
         XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(.togglePlayPause, firstResponder: table))
-        XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(.toggleFullscreen, firstResponder: table))
     }
 
     func testFocusInsideAListRowIsStillTheList() {
@@ -54,13 +52,13 @@ final class PlayerKeyRoutingTests: XCTestCase {
     func testTextBeingEditedKeepsEveryBareKeyIncludingTheSpaceBar() {
         let fieldEditor = NSTextView()
 
-        for key in [PlayerKey.togglePlayPause, .seekForward, .volumeUp, .toggleFullscreen] {
+        for key in [PlayerKey.togglePlayPause, .seekForward, .volumeUp] {
             XCTAssertFalse(PlayerKeyRouting.belongsToPlayer(key, firstResponder: fieldEditor))
         }
     }
 
     func testKeysReachThePlayerWhenNothingElseWantsThem() {
-        for key in [PlayerKey.togglePlayPause, .seekForward, .volumeUp, .toggleFullscreen] {
+        for key in [PlayerKey.togglePlayPause, .seekForward, .volumeUp] {
             XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(key, firstResponder: NSView()))
             XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(key, firstResponder: nil))
         }

@@ -73,7 +73,6 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     private static let frameAutosaveName = "FilePlayerWindowFrame"
 
     private let appModel: AppModel
-    private let windowState = WindowState()
     private let window: NSWindow
     private let onClose: () -> Void
 
@@ -102,8 +101,7 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         let hostingController = NSHostingController(
             rootView: FilePlayerView(
                 url: url,
-                appModel: appModel,
-                windowState: windowState
+                appModel: appModel
             )
         )
         // A hosting controller otherwise pins the window to the size its view

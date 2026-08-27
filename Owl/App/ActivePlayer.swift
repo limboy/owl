@@ -5,7 +5,6 @@ import SwiftUI
 /// One window's player, as the menu bar sees it.
 struct PlayerTarget {
     let appModel: AppModel
-    let windowState: WindowState
 }
 
 /// Which window the Playback menu acts on.
@@ -21,10 +20,6 @@ final class ActivePlayer: ObservableObject {
 
     @Published private(set) var target: PlayerTarget?
 
-    /// The full screen item is named for the state of the window it acts on, so
-    /// that state has to reach the menu bar as well as the window.
-    private var windowStateObserver: AnyCancellable?
-
     private init() {}
 
     func claim(_ target: PlayerTarget) {
@@ -37,10 +32,6 @@ final class ActivePlayer: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.target?.appModel !== target.appModel else { return }
             self.target = target
-            self.windowStateObserver = target.windowState.objectWillChange
-                .sink { [weak self] _ in
-                    self?.objectWillChange.send()
-                }
         }
     }
 
@@ -49,16 +40,11 @@ final class ActivePlayer: ObservableObject {
     func resign(_ appModel: AppModel) {
         guard target?.appModel === appModel else { return }
         target = nil
-        windowStateObserver = nil
     }
 }
 
 /// Hands `ActivePlayer` the window this view sits in, whenever that window comes
 /// to the front.
-///
-/// Full screen is deliberately not tracked: the fullscreen player is a window of
-/// its own, but it shows the same player as the window that opened it, which is
-/// the one still holding the claim.
 struct ActivePlayerTracker: NSViewRepresentable {
     let target: PlayerTarget
 

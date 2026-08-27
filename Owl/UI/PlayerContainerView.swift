@@ -6,8 +6,6 @@ struct PlayerContainerView: View {
     @ObservedObject var appModel: AppModel
     let engine: MPVPlayerEngine
     let videoView: OwlVideoView
-    @ObservedObject var windowState: WindowState
-    let isVideoSurfaceActive: Bool
 
     /// Whether there is a queue to move through. A window opened on one file has
     /// nothing to go on to, so it is shown neither previous nor next controls.
@@ -27,7 +25,6 @@ struct PlayerContainerView: View {
     @State private var seekValue: Double = 0
     @State private var hideTask: Task<Void, Never>?
     @State private var errorDismissTask: Task<Void, Never>?
-    @State private var isCursorHidden = false
     @State private var subtitleDelayIndicatorVisible = false
     @State private var subtitleDelayDismissTask: Task<Void, Never>?
 
@@ -35,16 +32,12 @@ struct PlayerContainerView: View {
         appModel: AppModel,
         engine: MPVPlayerEngine,
         videoView: OwlVideoView,
-        windowState: WindowState,
-        isVideoSurfaceActive: Bool = true,
         showsQueueControls: Bool = true,
         onClose: (@MainActor () -> Void)? = nil
     ) {
         self.appModel = appModel
         self.engine = engine
         self.videoView = videoView
-        self.windowState = windowState
-        self.isVideoSurfaceActive = isVideoSurfaceActive
         self.showsQueueControls = showsQueueControls
         self.onClose = onClose
         _state = ObservedObject(wrappedValue: appModel.playerState)
@@ -54,31 +47,8 @@ struct PlayerContainerView: View {
         ZStack {
             Color.black
 
-            VideoSurface(view: videoView, isActive: isVideoSurfaceActive)
+            VideoSurface(view: videoView)
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
-                    windowState.toggleFullscreen()
-                }
-
-            if state.hasMedia,
-               !isVideoSurfaceActive,
-               windowState.isFullscreenContentPresented {
-                Button {
-                    windowState.returnVideoFromFullscreen()
-                } label: {
-                    VStack(spacing: 14) {
-                        Image(systemName: "arrow.down.right.and.arrow.up.left")
-                            .font(.system(size: 34, weight: .semibold))
-                        Text("Click to Exit Full Screen")
-                            .font(.title3.weight(.semibold))
-                    }
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Returns the video to this window")
-            }
 
             if !state.hasMedia {
                 VStack(spacing: 12) {
@@ -112,11 +82,10 @@ struct PlayerContainerView: View {
 
                 Spacer()
 
-                if state.hasMedia, isVideoSurfaceActive {
+                if state.hasMedia {
                     PlayerControlsView(
                         appModel: appModel,
                         engine: engine,
-                        windowState: windowState,
                         state: state,
                         showsQueueControls: showsQueueControls,
                         isSeeking: $isSeeking,
@@ -136,7 +105,7 @@ struct PlayerContainerView: View {
             .animation(.easeOut(duration: 0.18), value: subtitleDelayIndicatorVisible)
         }
         .overlay(alignment: .topTrailing) {
-            if let onClose, state.hasMedia, isVideoSurfaceActive {
+            if let onClose, state.hasMedia {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .semibold))
@@ -175,17 +144,10 @@ struct PlayerContainerView: View {
         .onChange(of: state.subtitleDelayRevision) { _, _ in
             showSubtitleDelayIndicator()
         }
-        .onChange(of: controlsVisible) { _, visible in
-            updateCursorVisibility(controlsVisible: visible)
-        }
-        .onChange(of: windowState.isFullscreen) { _, isFullscreen in
-            updateCursorVisibility(controlsVisible: controlsVisible)
-        }
         .onDisappear {
             hideTask?.cancel()
             errorDismissTask?.cancel()
             subtitleDelayDismissTask?.cancel()
-            showCursorIfHidden()
         }
         .background {
             PlayerKeyboardMonitor(handle: handle)
@@ -205,8 +167,6 @@ struct PlayerContainerView: View {
             appModel.changeVolume(by: 5)
         case .volumeDown:
             appModel.changeVolume(by: -5)
-        case .toggleFullscreen:
-            windowState.toggleFullscreen()
         }
     }
 
@@ -233,13 +193,6 @@ struct PlayerContainerView: View {
         .padding()
     }
 
-    /// Takes the error banner away on its own after a while.
-    ///
-    /// The banner covers the top of the picture and there is nothing left to do
-    /// about most of what it reports — a file that would not open has already
-    /// been replaced by the next one by the time it is read. The close button
-    /// stays for anyone who wants it gone sooner, and the message is still
-    /// selectable until then.
     private func scheduleErrorDismiss(for message: String?) {
         errorDismissTask?.cancel()
         guard message != nil else { return }
@@ -265,10 +218,6 @@ struct PlayerContainerView: View {
         return milliseconds > 0 ? "+\(milliseconds) ms" : "\(milliseconds) ms"
     }
 
-    /// Shows the subtitle delay HUD and takes it away again after a beat, the
-    /// same shape as `scheduleErrorDismiss`: cancel whatever timer is
-    /// pending, so a burst of menu clicks keeps the HUD up rather than having
-    /// it flicker off between them, then restart the clock.
     private func showSubtitleDelayIndicator() {
         subtitleDelayDismissTask?.cancel()
         subtitleDelayIndicatorVisible = true
@@ -293,36 +242,11 @@ struct PlayerContainerView: View {
             controlsVisible = false
         }
     }
-
-    /// Keeps the pointer out of the way on the same schedule as the
-    /// controller: it disappears with it and comes back the moment the
-    /// controller does. Windowed playback never hides it — there is a title
-    /// bar and surrounding chrome to reach there.
-    ///
-    /// `setHiddenUntilMouseMoves` rather than `hide()`/`unhide()`: the latter
-    /// is a manually balanced counter that only ever un-hides through our own
-    /// `onChange`, and our hover callback firing is not reliable enough for
-    /// that to hold in a real (Spaces-backed) full screen window. The former
-    /// is handled natively by AppKit, so a stray mouse move always brings the
-    /// pointer back even if our own state falls out of sync.
-    private func updateCursorVisibility(controlsVisible: Bool) {
-        let shouldHide = windowState.isFullscreen && !controlsVisible
-        guard shouldHide != isCursorHidden else { return }
-        isCursorHidden = shouldHide
-        NSCursor.setHiddenUntilMouseMoves(shouldHide)
-    }
-
-    private func showCursorIfHidden() {
-        guard isCursorHidden else { return }
-        isCursorHidden = false
-        NSCursor.setHiddenUntilMouseMoves(false)
-    }
 }
 
 private struct PlayerControlsView: View {
     @ObservedObject var appModel: AppModel
     let engine: MPVPlayerEngine
-    @ObservedObject var windowState: WindowState
     @ObservedObject var state: PlayerState
     let showsQueueControls: Bool
     @Binding var isSeeking: Bool

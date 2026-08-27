@@ -8,7 +8,6 @@ enum PlayerKey: Equatable {
     case seekForward
     case volumeUp
     case volumeDown
-    case toggleFullscreen
 
     /// Whether holding the key down should keep repeating the action. Seeking
     /// and volume are worth repeating; toggling anything on the same repeats
@@ -17,7 +16,7 @@ enum PlayerKey: Equatable {
         switch self {
         case .seekBackward, .seekForward, .volumeUp, .volumeDown:
             true
-        case .togglePlayPause, .toggleFullscreen:
+        case .togglePlayPause:
             false
         }
     }
@@ -52,7 +51,7 @@ enum PlayerKeyRouting {
         case NSDownArrowFunctionKey:
             return .volumeDown
         default:
-            return characters.lowercased() == "f" ? .toggleFullscreen : nil
+            return nil
         }
     }
 

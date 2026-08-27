@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var appModel: AppModel
-    @ObservedObject var windowState: WindowState
     let library: FolderLibrary
 
     var body: some View {
@@ -12,7 +11,6 @@ struct ContentView: View {
                     appModel: appModel,
                     engine: engine,
                     videoView: videoView,
-                    windowState: windowState,
                     library: library
                 )
             } else {
@@ -24,7 +22,7 @@ struct ContentView: View {
         }
         .background {
             ActivePlayerTracker(
-                target: PlayerTarget(appModel: appModel, windowState: windowState)
+                target: PlayerTarget(appModel: appModel)
             )
             .frame(width: 0, height: 0)
         }
@@ -35,7 +33,6 @@ private struct PlayerLayout: View {
     @ObservedObject var appModel: AppModel
     let engine: MPVPlayerEngine
     let videoView: OwlVideoView
-    @ObservedObject var windowState: WindowState
     let library: FolderLibrary
 
     @ObservedObject private var state: PlayerState
@@ -50,13 +47,11 @@ private struct PlayerLayout: View {
         appModel: AppModel,
         engine: MPVPlayerEngine,
         videoView: OwlVideoView,
-        windowState: WindowState,
         library: FolderLibrary
     ) {
         self.appModel = appModel
         self.engine = engine
         self.videoView = videoView
-        self.windowState = windowState
         self.library = library
         _state = ObservedObject(wrappedValue: appModel.playerState)
     }
@@ -73,18 +68,6 @@ private struct PlayerLayout: View {
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .animation(Self.playerTransition, value: state.hasMedia)
-        .onAppear {
-            windowState.attachVideoView(videoView)
-        }
-        .background {
-            FullscreenPlayerLayer(
-                appModel: appModel,
-                engine: engine,
-                videoView: videoView,
-                windowState: windowState,
-                showsQueueControls: true
-            )
-        }
     }
 
     /// Sends the picture off the bottom of the window with playback still
@@ -105,8 +88,6 @@ private struct PlayerLayout: View {
             appModel: appModel,
             engine: engine,
             videoView: videoView,
-            windowState: windowState,
-            isVideoSurfaceActive: !windowState.isFullscreen,
             showsQueueControls: true,
             onClose: dismissPlayer
         )

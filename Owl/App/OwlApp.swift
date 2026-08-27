@@ -8,7 +8,6 @@ import Sparkle
 struct OwlApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var appModel: AppModel
-    @StateObject private var windowState = WindowState()
 
     /// Held here rather than inside the model, because the browser is the
     /// window's and a window opened on one file has neither.
@@ -38,7 +37,7 @@ struct OwlApp: App {
 
     var body: some Scene {
         WindowGroup("Owl") {
-            ContentView(appModel: appModel, windowState: windowState, library: library)
+            ContentView(appModel: appModel, library: library)
                 .frame(minWidth: 720, minHeight: 560)
                 .background {
                     WindowFrameAutosave(key: "MainWindowFrame")
@@ -126,12 +125,6 @@ struct FileCommands: Commands {
 /// before any window has come to the front, so every item would stay grey for
 /// the rest of the run. The actions do nothing when there is nothing to do,
 /// which is the same as choosing them with no video open ever did.
-///
-/// Only full screen carries a key equivalent, and it is the system one. The
-/// space bar, the arrows and a bare `f` all work too, but they are watched by
-/// `PlayerKeyboardMonitor` instead of being bound here: a menu equivalent is
-/// matched before the key event reaches the window, so binding an unmodified
-/// key in the menu takes it away from every view in the app for good.
 struct PlaybackCommands: Commands {
     @ObservedObject private var activePlayer = ActivePlayer.shared
 
@@ -170,21 +163,10 @@ struct PlaybackCommands: Commands {
             Button("Reset Speed") {
                 target?.appModel.setSpeed(1)
             }
-
-            Divider()
-
-            Button(isFullscreen ? "Exit Full Screen" : "Enter Full Screen") {
-                target?.windowState.toggleFullscreen()
-            }
-            .keyboardShortcut("f", modifiers: [.command, .control])
         }
     }
 
     private var target: PlayerTarget? {
         activePlayer.target
-    }
-
-    private var isFullscreen: Bool {
-        target?.windowState.isFullscreen == true
     }
 }
