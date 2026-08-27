@@ -55,7 +55,10 @@ struct TimelinePreviewScrubber: View {
 
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.white.opacity(0.22))
+                    .fill(Color.black.opacity(0.4))
+                    .frame(height: 4)
+                Capsule()
+                    .fill(Color.white.opacity(0.35))
                     .frame(height: 4)
                 Capsule()
                     .fill(Color.accentColor)
@@ -63,7 +66,7 @@ struct TimelinePreviewScrubber: View {
                 Circle()
                     .fill(Color.white)
                     .frame(width: 12, height: 12)
-                    .shadow(color: .black.opacity(0.25), radius: 2)
+                    .shadow(color: .black.opacity(0.4), radius: 2.5, y: 1)
                     .offset(x: max(0, min(width - 12, width * progress - 6)))
 
                 Color.clear

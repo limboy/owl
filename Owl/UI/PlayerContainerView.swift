@@ -109,8 +109,16 @@ struct PlayerContainerView: View {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
                         .frame(width: 34, height: 34)
-                        .background(.ultraThinMaterial, in: Circle())
+                        .background {
+                            Circle()
+                                .fill(Color.black.opacity(0.72))
+                                .background(.ultraThinMaterial, in: Circle())
+                                .overlay {
+                                    Circle().strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                                }
+                        }
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -176,6 +184,7 @@ struct PlayerContainerView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.yellow)
             Text(message)
+                .foregroundStyle(.white)
                 .lineLimit(2)
                 .textSelection(.enabled)
             Spacer()
@@ -183,13 +192,23 @@ struct PlayerContainerView: View {
                 state.errorMessage = nil
             } label: {
                 Image(systemName: "xmark")
+                    .foregroundStyle(.white.opacity(0.8))
             }
             .buttonStyle(.plain)
         }
         .font(.callout)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .background {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.black.opacity(0.75))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                }
+        }
+        .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
         .padding()
     }
 
@@ -206,10 +225,20 @@ struct PlayerContainerView: View {
     private var subtitleDelayIndicator: some View {
         Text("Subtitle Delay: \(subtitleDelayLabel(state.subtitleDelay))")
             .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(.white)
             .monospacedDigit()
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .background {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.black.opacity(0.75))
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                    }
+            }
+            .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
     }
 
     private func subtitleDelayLabel(_ seconds: Double) -> String {
@@ -261,8 +290,16 @@ private struct PlayerControlsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        .background {
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.black.opacity(0.72))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                }
+        }
+        .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
     }
 
     private var regularControls: some View {
@@ -296,7 +333,7 @@ private struct PlayerControlsView: View {
                     Text(timeString(state.duration))
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.white.opacity(0.75))
                 .monospacedDigit()
 
                 seekSlider
@@ -343,7 +380,7 @@ private struct PlayerControlsView: View {
     private var currentTimeLabel: some View {
         Text(timeString(isSeeking ? seekValue : state.currentTime))
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.white.opacity(0.75))
             .monospacedDigit()
             .frame(width: 54, alignment: .trailing)
     }
@@ -363,7 +400,7 @@ private struct PlayerControlsView: View {
     private var durationLabel: some View {
         Text(timeString(state.duration))
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.white.opacity(0.75))
             .monospacedDigit()
             .frame(width: 54, alignment: .leading)
     }
