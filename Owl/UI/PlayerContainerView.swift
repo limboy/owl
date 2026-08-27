@@ -452,13 +452,6 @@ private struct PlayerControlsView: View {
                 audioMenu
             }
             subtitleMenu
-
-            controlButton(
-                windowState.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                help: windowState.isFullscreen ? "Exit Full Screen" : "Enter Full Screen"
-            ) {
-                windowState.toggleFullscreen()
-            }
         }
     }
 
