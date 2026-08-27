@@ -40,6 +40,12 @@ private struct PlayerLayout: View {
 
     @ObservedObject private var state: PlayerState
 
+    /// Set while the picture is on its way out, so that the overlay leaves
+    /// before playback is torn down rather than after it.
+    @State private var isDismissing = false
+
+    private static let playerTransition = Animation.spring(response: 0.42, dampingFraction: 0.88)
+
     init(
         appModel: AppModel,
         engine: MPVPlayerEngine,
@@ -59,14 +65,14 @@ private struct PlayerLayout: View {
         ZStack {
             FolderBrowserView(appModel: appModel, library: library)
 
-            if state.hasMedia {
+            if state.hasMedia, !isDismissing {
                 playerOverlay
                     .zIndex(1)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .animation(.spring(response: 0.42, dampingFraction: 0.88), value: state.hasMedia)
+        .animation(Self.playerTransition, value: state.hasMedia)
         .onAppear {
             windowState.attachVideoView(videoView)
         }
@@ -81,6 +87,19 @@ private struct PlayerLayout: View {
         }
     }
 
+    /// Sends the picture off the bottom of the window with playback still
+    /// running, and only stops it once the overlay has left. Closing the video
+    /// first would blank the surface and slide an empty black panel away.
+    private func dismissPlayer() {
+        guard !isDismissing else { return }
+        withAnimation(Self.playerTransition, completionCriteria: .removed) {
+            isDismissing = true
+        } completion: {
+            appModel.closeVideo()
+            isDismissing = false
+        }
+    }
+
     private var playerOverlay: some View {
         PlayerContainerView(
             appModel: appModel,
@@ -89,7 +108,7 @@ private struct PlayerLayout: View {
             windowState: windowState,
             isVideoSurfaceActive: !windowState.isFullscreen,
             showsQueueControls: true,
-            showsCloseButton: true
+            onClose: dismissPlayer
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // The window follows the system, but the picture is always on black,

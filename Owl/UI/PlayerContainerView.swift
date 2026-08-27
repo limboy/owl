@@ -13,8 +13,13 @@ struct PlayerContainerView: View {
     /// nothing to go on to, so it is shown neither previous nor next controls.
     let showsQueueControls: Bool
 
-    /// Whether this host can dismiss the current video.
-    let showsCloseButton: Bool
+    /// Dismisses the current video, if this host has somewhere to dismiss it
+    /// to. Hosts that pass nothing are shown no close button.
+    ///
+    /// The player owns the request but not the teardown: a host that slides
+    /// the picture away wants the video to travel with it, so it runs its own
+    /// animation and stops playback once that has finished.
+    let onClose: (@MainActor () -> Void)?
 
     @ObservedObject private var state: PlayerState
     @State private var controlsVisible = true
@@ -33,7 +38,7 @@ struct PlayerContainerView: View {
         windowState: WindowState,
         isVideoSurfaceActive: Bool = true,
         showsQueueControls: Bool = true,
-        showsCloseButton: Bool = false
+        onClose: (@MainActor () -> Void)? = nil
     ) {
         self.appModel = appModel
         self.engine = engine
@@ -41,7 +46,7 @@ struct PlayerContainerView: View {
         self.windowState = windowState
         self.isVideoSurfaceActive = isVideoSurfaceActive
         self.showsQueueControls = showsQueueControls
-        self.showsCloseButton = showsCloseButton
+        self.onClose = onClose
         _state = ObservedObject(wrappedValue: appModel.playerState)
     }
 
@@ -131,12 +136,8 @@ struct PlayerContainerView: View {
             .animation(.easeOut(duration: 0.18), value: subtitleDelayIndicatorVisible)
         }
         .overlay(alignment: .topTrailing) {
-            if showsCloseButton, state.hasMedia, isVideoSurfaceActive {
-                Button {
-                    withAnimation(.spring(response: 0.38, dampingFraction: 0.9)) {
-                        appModel.closeVideo()
-                    }
-                } label: {
+            if let onClose, state.hasMedia, isVideoSurfaceActive {
+                Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .semibold))
                         .frame(width: 34, height: 34)
