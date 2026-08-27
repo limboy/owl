@@ -186,13 +186,25 @@ if [[ "$xcode_major" == "26" && "$xcode_minor" =~ ^[0-9]+$ ]] && (( xcode_minor 
   printf 'warning: %s has an Icon Composer build regression; using a generated legacy .icns fallback.\n' "$xcode_version_line" >&2
 fi
 
+# SwiftPM records absolute artifact paths in this file. A Derived Data folder
+# retained after the repository moves can therefore keep pointing at the old
+# checkout. Recreate only that generated state while preserving downloads.
+swiftpm_workspace_state="$derived_data_dir/SourcePackages/workspace-state.json"
+if [[ -f "$swiftpm_workspace_state" ]]; then
+  rm -f "$swiftpm_workspace_state"
+fi
+
 info "Building Owl Release for macOS arm64"
 xcodebuild_args=(
   -project "$project_dir/Owl.xcodeproj" \
   -scheme Owl \
   -configuration Release \
   -destination 'platform=macOS,arch=arm64' \
-  -derivedDataPath "$derived_data_dir"
+  -derivedDataPath "$derived_data_dir" \
+  -clonedSourcePackagesDirPath "$derived_data_dir/SourcePackages" \
+  CODE_SIGN_STYLE=Manual \
+  CODE_SIGN_IDENTITY=- \
+  DEVELOPMENT_TEAM=
 )
 if [[ "$use_legacy_icon" == true ]]; then
   xcodebuild_args+=(EXCLUDED_SOURCE_FILE_NAMES=owl.icon)
@@ -211,7 +223,14 @@ if command -v plutil >/dev/null 2>&1; then
 fi
 
 package_tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/owl-release.XXXXXX")"
-trap 'rm -rf "$package_tmp_dir"' EXIT
+install_tmp_dir=""
+cleanup() {
+  rm -rf "$package_tmp_dir"
+  if [[ -n "$install_tmp_dir" && -d "$install_tmp_dir" ]]; then
+    rm -rf "$install_tmp_dir"
+  fi
+}
+trap cleanup EXIT
 
 if [[ "$use_legacy_icon" == true ]]; then
   icon_source_image="$project_dir/Assets/owl.icon/owl.png"
@@ -256,9 +275,37 @@ if [[ "$should_install" == true ]]; then
   mkdir -p "$install_dir" || fail "Cannot create install directory: $install_dir"
   installed_app="$install_dir/Owl.app"
   info "Installing Owl to $installed_app"
-  ditto --rsrc --extattr --acl "$built_app" "$installed_app" || \
+  install_tmp_dir="$(mktemp -d "$install_dir/.owl-install.XXXXXX")" || \
+    fail "Cannot stage an app in $install_dir. Try --install-dir ~/Applications."
+  staged_app="$install_tmp_dir/Owl.app"
+  previous_app="$install_tmp_dir/Previous-Owl.app"
+  ditto --rsrc --extattr --acl "$built_app" "$staged_app" || \
+    fail "Cannot stage Owl in $install_dir. Try --install-dir ~/Applications."
+  if [[ -e "$installed_app" ]]; then
+    mv "$installed_app" "$previous_app" || fail "Cannot replace $installed_app."
+  fi
+  if ! mv "$staged_app" "$installed_app"; then
+    if [[ -e "$previous_app" ]]; then
+      mv "$previous_app" "$installed_app" || true
+    fi
     fail "Cannot install to $installed_app. Try --install-dir ~/Applications."
-  [[ -x "$installed_app/Contents/MacOS/Owl" ]] || fail "Installed app is incomplete: $installed_app"
+  fi
+  install_validation_error=""
+  if [[ ! -x "$installed_app/Contents/MacOS/Owl" ]]; then
+    install_validation_error="Installed app is incomplete: $installed_app"
+  elif command -v codesign >/dev/null 2>&1 && \
+      ! codesign --verify --deep --strict "$installed_app" >/dev/null 2>&1; then
+    install_validation_error="Installed app failed code-signature validation."
+  fi
+  if [[ -n "$install_validation_error" ]]; then
+    mv "$installed_app" "$install_tmp_dir/Failed-Owl.app" || true
+    if [[ -e "$previous_app" ]]; then
+      mv "$previous_app" "$installed_app" || true
+    fi
+    fail "$install_validation_error"
+  fi
+  rm -rf "$install_tmp_dir"
+  install_tmp_dir=""
 
   # A copy of Owl left in another Applications folder keeps the same bundle
   # identifier, and LaunchServices may resolve that stale copy instead of the one
