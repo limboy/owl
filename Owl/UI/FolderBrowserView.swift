@@ -135,9 +135,12 @@ struct FolderBrowserView: View {
                         }
                         .tag(root.id)
                         .contextMenu {
-                            if !root.isAvailable {
+                            if root.isAvailable {
+                                Button("Show in Finder") { showInFinder(root) }
+                            } else {
                                 Button("Reconnect…") { reconnect(root) }
                             }
+                            Divider()
                             Button("Remove Folder", role: .destructive) {
                                 library.removeRoot(id: root.id)
                             }
@@ -593,6 +596,10 @@ struct FolderBrowserView: View {
 
     private func showInFinder(_ entry: BrowserEntry) {
         NSWorkspace.shared.activateFileViewerSelecting([entry.url])
+    }
+
+    private func showInFinder(_ root: LibraryRoot) {
+        NSWorkspace.shared.activateFileViewerSelecting([root.url])
     }
 
     private func moveToTrash(_ entry: BrowserEntry) {
