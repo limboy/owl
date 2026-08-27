@@ -213,7 +213,7 @@ struct FolderBrowserView: View {
             .frame(width: 76)
             .help("Choose Grid or List View")
         }
-        .padding(.leading, layout == .grid ? 24 : 18)
+        .padding(.leading, 24)
         .padding(.trailing, 12)
         .frame(height: 58)
     }
@@ -308,7 +308,7 @@ struct FolderBrowserView: View {
             source: entry.kind == .folder ? .folder(entry.url) : .video(entry.url),
             isFolder: entry.kind == .folder,
             progress: entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil,
-            trailingText: entry.kind == .video
+            metadataText: entry.kind == .video
                 ? library.metadata(for: entry.url)?.summaryParts.joined(separator: "  ·  ")
                 : nil,
             isEnabled: true,
@@ -491,7 +491,7 @@ private struct LibraryListButton: View {
     let source: CoverSource
     let isFolder: Bool
     let progress: PlaybackProgress?
-    let trailingText: String?
+    let metadataText: String?
     let isEnabled: Bool
     let action: () -> Void
 
@@ -518,17 +518,17 @@ private struct LibraryListButton: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
+
+                    if let metadataText, !metadataText.isEmpty {
+                        Text(metadataText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer(minLength: 12)
-
-                if let trailingText, !trailingText.isEmpty {
-                    Text(trailingText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                }
 
                 Image(systemName: isFolder ? "chevron.right" : "play.fill")
                     .font(.caption.weight(.semibold))
