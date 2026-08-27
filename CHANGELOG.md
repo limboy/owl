@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-27
+- Improve reliability of local installation and app replacement
+
 ## [1.0.0] - 2026-08-27
 - Add optional metadata sync with TMDB, displaying matched titles, descriptions, and poster artwork
 - Cache parsed video metadata and folder cover images across launches to speed up library loading
