@@ -397,7 +397,6 @@ struct FolderBrowserView: View {
             onToggleWatched: entry.kind == .video ? { toggleWatched(entry) } : nil,
             action: { open(entry) }
         )
-        .help(helpText(for: entry, online: online))
         .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
     }
 
@@ -419,7 +418,6 @@ struct FolderBrowserView: View {
             action: { open(entry) }
         )
         .frame(maxWidth: .infinity, alignment: .leading)
-        .help(helpText(for: entry, online: online))
         .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
     }
 
@@ -458,14 +456,6 @@ struct FolderBrowserView: View {
             return entry.url.path
         }
         return online?.subtitleLine
-    }
-
-    /// The full description, which neither layout has room to show whole.
-    private func helpText(for entry: BrowserEntry, online: OnlineMetadata?) -> String {
-        guard let online else { return entry.name }
-        return [online.subtitleLine, online.overview]
-            .compactMap { $0 }
-            .joined(separator: "\n")
     }
 
     private func select(_ root: LibraryRoot, focusSidebar: Bool = false) {

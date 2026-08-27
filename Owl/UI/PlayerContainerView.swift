@@ -534,10 +534,8 @@ private struct PlayerControlsView: View {
                 }
             }
         } label: {
-            Text(speedLabel(state.speed))
-                .font(.system(size: 12, weight: .semibold))
-                .monospacedDigit()
-                .frame(minWidth: 26, minHeight: 22)
+            Image(systemName: "gauge.with.dots.needle.67percent")
+                .frame(width: 22, height: 22)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)

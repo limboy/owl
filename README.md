@@ -167,7 +167,7 @@ open "build/Build/Products/Release/Owl.app"
 - Use the audio menu to switch between embedded audio tracks.
 - Use the Playback Options (`…`) menu in the browser toolbar to configure
   looping and shuffle, and to switch metadata sync on or off.
-- Use the `1x` menu in the controls to change playback speed.
+- Use the playback speed menu in the controls to change playback speed.
 
 Added folders are remembered and monitored for filesystem changes. The queue is
 made from the immediate video files in the folder where playback was started.
