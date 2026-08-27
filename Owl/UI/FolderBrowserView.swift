@@ -486,7 +486,7 @@ private struct LibraryGridButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: 4) {
                 MediaCover(
                     source: source,
                     isFolder: isFolder,
