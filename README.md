@@ -160,7 +160,8 @@ open "build/Build/Products/Release/Owl.app"
 - Use the subtitle menu to select an embedded track, turn subtitles off, or
   load an external subtitle.
 - Use the audio menu to switch between embedded audio tracks.
-- Use the shuffle and repeat buttons to control queue playback.
+- Use the Playback Options (`…`) menu in the browser toolbar to configure
+  looping and shuffle.
 - Use the `1x` menu in the controls to change playback speed.
 
 Added folders are remembered and monitored for filesystem changes. The queue is

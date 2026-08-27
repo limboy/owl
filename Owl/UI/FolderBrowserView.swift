@@ -10,6 +10,7 @@ struct FolderBrowserView: View {
     @ObservedObject var appModel: AppModel
     @ObservedObject private var library: FolderLibrary
     @ObservedObject private var playerState: PlayerState
+    @ObservedObject private var playbackQueue: PlaybackQueue
     @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
     @State private var isDropTargeted = false
     @State private var selectedRootID: UUID?
@@ -29,6 +30,7 @@ struct FolderBrowserView: View {
         self.appModel = appModel
         _library = ObservedObject(wrappedValue: library)
         _playerState = ObservedObject(wrappedValue: appModel.playerState)
+        _playbackQueue = ObservedObject(wrappedValue: appModel.playbackQueue)
     }
 
     var body: some View {
@@ -47,6 +49,10 @@ struct FolderBrowserView: View {
 
                     ToolbarItem(placement: .primaryAction) {
                         layoutPicker
+                    }
+
+                    ToolbarItem(placement: .primaryAction) {
+                        playbackOptionsMenu
                     }
                 }
                 // The toolbar is drawn in the title bar, above the content, so
@@ -192,10 +198,11 @@ struct FolderBrowserView: View {
     /// How far into the window the window buttons and the sidebar toggle reach.
     private static let titleBarControlsWidth: CGFloat = 156
 
-    /// How much of the trailing title bar strip the layout picker takes up.
-    /// The header runs up under the title bar, so the title has to stop short
-    /// of the toolbar rather than truncate beneath it.
-    private static let layoutControlWidth: CGFloat = 104
+    /// How much of the trailing title bar strip the layout picker and playback
+    /// options menu take up. The header runs up under the title bar, so the
+    /// title has to stop short of these controls rather than truncate beneath
+    /// them.
+    private static let toolbarControlsWidth: CGFloat = 154
 
     private static let splitSpace = "BrowserSplit"
 
@@ -246,7 +253,7 @@ struct FolderBrowserView: View {
             Spacer(minLength: 16)
         }
         .padding(.leading, headerLeadingInset)
-        .padding(.trailing, Self.layoutControlWidth)
+        .padding(.trailing, Self.toolbarControlsWidth)
         .frame(height: 58)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.frame(in: .named(Self.splitSpace)).minX
@@ -267,6 +274,29 @@ struct FolderBrowserView: View {
         .pickerStyle(.segmented)
         .labelsHidden()
         .help("Choose Grid or List View")
+    }
+
+    private var playbackOptionsMenu: some View {
+        Menu {
+            Menu("Loop") {
+                repeatModeToggle("Off", mode: .off)
+                repeatModeToggle("All Videos", mode: .all)
+                repeatModeToggle("Current Video", mode: .one)
+            }
+
+            Toggle("Shuffle", isOn: $playbackQueue.isShuffled)
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .help("Playback Options")
+        .accessibilityLabel("Playback Options")
+    }
+
+    private func repeatModeToggle(_ title: String, mode: RepeatMode) -> some View {
+        Toggle(title, isOn: Binding(
+            get: { playbackQueue.repeatMode == mode },
+            set: { if $0 { playbackQueue.repeatMode = mode } }
+        ))
     }
 
     private var detailTitle: String {

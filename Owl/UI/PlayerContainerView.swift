@@ -10,15 +10,13 @@ struct PlayerContainerView: View {
     let isVideoSurfaceActive: Bool
 
     /// Whether there is a queue to move through. A window opened on one file has
-    /// nothing to go on to, so it is shown neither a way there nor a way to
-    /// shuffle a list of one.
+    /// nothing to go on to, so it is shown neither previous nor next controls.
     let showsQueueControls: Bool
 
     /// Whether this host can dismiss the current video.
     let showsCloseButton: Bool
 
     @ObservedObject private var state: PlayerState
-    @ObservedObject private var queue: PlaybackQueue
     @State private var controlsVisible = true
     @State private var isSeeking = false
     @State private var seekValue: Double = 0
@@ -45,7 +43,6 @@ struct PlayerContainerView: View {
         self.showsQueueControls = showsQueueControls
         self.showsCloseButton = showsCloseButton
         _state = ObservedObject(wrappedValue: appModel.playerState)
-        _queue = ObservedObject(wrappedValue: appModel.playbackQueue)
     }
 
     var body: some View {
@@ -116,7 +113,6 @@ struct PlayerContainerView: View {
                         engine: engine,
                         windowState: windowState,
                         state: state,
-                        queue: queue,
                         showsQueueControls: showsQueueControls,
                         isSeeking: $isSeeking,
                         seekValue: $seekValue
@@ -327,7 +323,6 @@ private struct PlayerControlsView: View {
     let engine: MPVPlayerEngine
     @ObservedObject var windowState: WindowState
     @ObservedObject var state: PlayerState
-    @ObservedObject var queue: PlaybackQueue
     let showsQueueControls: Bool
     @Binding var isSeeking: Bool
     @Binding var seekValue: Double
@@ -452,40 +447,10 @@ private struct PlayerControlsView: View {
     private var secondaryControls: some View {
         Group {
             speedMenu
-            audioMenu
+            if state.audioTracks.count > 1 {
+                audioMenu
+            }
             subtitleMenu
-
-            if showsQueueControls {
-                controlButton(
-                    "shuffle",
-                    foregroundStyle: queue.isShuffled ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.primary),
-                    help: queue.isShuffled ? "Shuffle On" : "Shuffle Off"
-                ) {
-                    queue.isShuffled.toggle()
-                }
-            }
-
-            if showsQueueControls {
-                controlButton(
-                    queue.repeatMode.symbolName,
-                    foregroundStyle: queue.repeatMode == .off
-                        ? AnyShapeStyle(Color.primary)
-                        : AnyShapeStyle(Color.accentColor),
-                    help: queue.repeatMode.label
-                ) {
-                    queue.cycleRepeatMode()
-                }
-            } else {
-                controlButton(
-                    "repeat",
-                    foregroundStyle: queue.repeatMode == .off
-                        ? AnyShapeStyle(Color.primary)
-                        : AnyShapeStyle(Color.accentColor),
-                    help: queue.repeatMode == .off ? "Repeat Off" : "Repeat On"
-                ) {
-                    queue.toggleRepeatOne()
-                }
-            }
 
             controlButton(
                 windowState.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
