@@ -468,10 +468,19 @@ private struct LibraryGridButton: View {
 
     @State private var isCoverHovered = false
 
+    private var showsWatchedAffordance: Bool {
+        isCoverHovered && onToggleWatched != nil
+    }
+
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 9) {
-                MediaCover(source: source, isFolder: isFolder, progress: progress)
+                MediaCover(
+                    source: source,
+                    isFolder: isFolder,
+                    progress: progress,
+                    showsWatchedAffordance: showsWatchedAffordance
+                )
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay {
@@ -520,10 +529,19 @@ private struct LibraryListButton: View {
 
     @State private var isCoverHovered = false
 
+    private var showsWatchedAffordance: Bool {
+        isCoverHovered && onToggleWatched != nil
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                MediaCover(source: source, isFolder: isFolder, progress: progress)
+                MediaCover(
+                    source: source,
+                    isFolder: isFolder,
+                    progress: progress,
+                    showsWatchedAffordance: showsWatchedAffordance
+                )
                     .frame(width: 112, height: 64)
                     .clipShape(RoundedRectangle(cornerRadius: 7))
                     .overlay {
@@ -556,10 +574,12 @@ private struct LibraryListButton: View {
 
                 Spacer(minLength: 12)
 
-                Image(systemName: isFolder ? "chevron.right" : "play.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 18)
+                if isFolder {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 18)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
@@ -567,7 +587,7 @@ private struct LibraryListButton: View {
         }
         .buttonStyle(LibraryItemButtonStyle())
         .disabled(!isEnabled)
-        .overlay(alignment: .topLeading) {
+        .overlay(alignment: .leading) {
             if isCoverHovered, let onToggleWatched {
                 WatchedToggleButton(
                     isWatched: progress?.isCompleted == true,
@@ -576,7 +596,6 @@ private struct LibraryListButton: View {
                 .padding(8)
                 .frame(width: 112, height: 64, alignment: .topTrailing)
                 .padding(.leading, 10)
-                .padding(.top, 7)
             }
         }
     }
@@ -588,19 +607,9 @@ private struct WatchedToggleButton: View {
 
     var body: some View {
         Button(action: action) {
-            ZStack {
-                Circle()
-                    .fill(isWatched ? Color.accentColor : .black.opacity(0.5))
-                if isWatched {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                } else {
-                    Circle()
-                        .strokeBorder(.white.opacity(0.9), lineWidth: 1.5)
-                }
-            }
-            .frame(width: 24, height: 24)
+            Color.clear
+                .frame(width: 24, height: 24)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .help(isWatched ? "Mark as Unwatched" : "Mark as Watched")
@@ -624,6 +633,7 @@ private struct MediaCover: View {
     let source: CoverSource
     let isFolder: Bool
     let progress: PlaybackProgress?
+    var showsWatchedAffordance = false
 
     @State private var image: NSImage?
 
@@ -678,17 +688,11 @@ private struct MediaCover: View {
         }
     }
 
+    private var isWatched: Bool { progress?.isCompleted == true }
+
     @ViewBuilder
     private var playbackStateOverlay: some View {
-        if progress?.isCompleted == true {
-            Image(systemName: "checkmark")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 24, height: 24)
-                .background(Color.accentColor, in: Circle())
-                .padding(8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        } else if let progress, progress.fraction > 0 {
+        if !isWatched, let progress, progress.fraction > 0 {
             GeometryReader { proxy in
                 VStack(spacing: 0) {
                     Spacer()
@@ -703,6 +707,31 @@ private struct MediaCover: View {
                 }
             }
         }
+
+        // The watched badge and the hover affordance are the same view in the same
+        // slot, so toggling hover never shifts the circle.
+        if isWatched || showsWatchedAffordance {
+            watchedBadge
+                .padding(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        }
+    }
+
+    @ViewBuilder
+    private var watchedBadge: some View {
+        ZStack {
+            Circle()
+                .fill(isWatched ? Color.accentColor : .black.opacity(0.5))
+            if isWatched {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+            } else {
+                Circle()
+                    .strokeBorder(.white.opacity(0.9), lineWidth: 1.5)
+            }
+        }
+        .frame(width: 24, height: 24)
     }
 
     private var playbackAccessibilityValue: String {
