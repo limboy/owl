@@ -466,7 +466,19 @@ private struct LibraryGridButton: View {
     let onToggleWatched: (() -> Void)?
     let action: () -> Void
 
+    /// Where the artwork sits inside the card, and whether the pointer is in it.
+    ///
+    /// The pointer is tracked on the whole card rather than on the artwork,
+    /// because the toggle is an overlay stacked above the artwork and outside
+    /// it: an `onHover` on the artwork alone lost the pointer the instant it
+    /// crossed onto the toggle, which hid the toggle, handed the pointer back,
+    /// and flickered. One tracker on an ancestor of both, tested against the
+    /// artwork's rect, keeps the reveal scoped to the artwork without the
+    /// hand-off.
     @State private var isCoverHovered = false
+    @State private var coverFrame: CGRect = .zero
+
+    private static let hoverSpace = "LibraryGridItem"
 
     private var showsWatchedAffordance: Bool {
         isCoverHovered && onToggleWatched != nil
@@ -479,7 +491,8 @@ private struct LibraryGridButton: View {
                     source: source,
                     isFolder: isFolder,
                     progress: progress,
-                    showsWatchedAffordance: showsWatchedAffordance
+                    showsWatchedAffordance: showsWatchedAffordance,
+                    showsTimeLeftBadge: true
                 )
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -487,7 +500,9 @@ private struct LibraryGridButton: View {
                         RoundedRectangle(cornerRadius: 10)
                             .strokeBorder(.white.opacity(0.1))
                     }
-                    .onHover { isCoverHovered = $0 }
+                    .onGeometryChange(for: CGRect.self) { proxy in
+                        proxy.frame(in: .named(Self.hoverSpace))
+                    } action: { coverFrame = $0 }
 
                 Text(title)
                     .font(.headline)
@@ -513,6 +528,15 @@ private struct LibraryGridButton: View {
                 .padding(8)
             }
         }
+        .coordinateSpace(.named(Self.hoverSpace))
+        .onContinuousHover(coordinateSpace: .named(Self.hoverSpace)) { phase in
+            switch phase {
+            case .active(let location):
+                isCoverHovered = coverFrame.contains(location)
+            case .ended:
+                isCoverHovered = false
+            }
+        }
     }
 }
 
@@ -527,10 +551,26 @@ private struct LibraryListButton: View {
     let onToggleWatched: (() -> Void)?
     let action: () -> Void
 
+    /// Where the artwork sits inside the row, and whether the pointer is in it.
+    ///
+    /// The pointer is tracked on the whole row rather than on the artwork,
+    /// because the toggle is an overlay stacked above the artwork and outside
+    /// it: an `onHover` on the artwork alone lost the pointer the instant it
+    /// crossed onto the toggle, which hid the toggle, handed the pointer back,
+    /// and flickered. One tracker on an ancestor of both, tested against the
+    /// artwork's rect, keeps the reveal scoped to the artwork without the
+    /// hand-off.
     @State private var isCoverHovered = false
+    @State private var coverFrame: CGRect = .zero
+
+    private static let hoverSpace = "LibraryListItem"
 
     private var showsWatchedAffordance: Bool {
         isCoverHovered && onToggleWatched != nil
+    }
+
+    private var timeLeftText: String? {
+        isFolder ? nil : progress?.timeLeftText
     }
 
     var body: some View {
@@ -548,7 +588,9 @@ private struct LibraryListButton: View {
                         RoundedRectangle(cornerRadius: 7)
                             .strokeBorder(.white.opacity(0.08))
                     }
-                    .onHover { isCoverHovered = $0 }
+                    .onGeometryChange(for: CGRect.self) { proxy in
+                        proxy.frame(in: .named(Self.hoverSpace))
+                    } action: { coverFrame = $0 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -574,12 +616,21 @@ private struct LibraryListButton: View {
 
                 Spacer(minLength: 12)
 
-                if isFolder {
+                HStack(spacing: 6) {
+                    if let timeLeftText {
+                        Text(timeLeftText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .lineLimit(1)
+                    }
+
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.tertiary)
                         .frame(width: 18)
                 }
+                .layoutPriority(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
@@ -596,6 +647,15 @@ private struct LibraryListButton: View {
                 .padding(8)
                 .frame(width: 112, height: 64, alignment: .topTrailing)
                 .padding(.leading, 10)
+            }
+        }
+        .coordinateSpace(.named(Self.hoverSpace))
+        .onContinuousHover(coordinateSpace: .named(Self.hoverSpace)) { phase in
+            switch phase {
+            case .active(let location):
+                isCoverHovered = coverFrame.contains(location)
+            case .ended:
+                isCoverHovered = false
             }
         }
     }
@@ -634,6 +694,9 @@ private struct MediaCover: View {
     let isFolder: Bool
     let progress: PlaybackProgress?
     var showsWatchedAffordance = false
+    /// Whether the remaining time belongs on the artwork. The list row prints it
+    /// beside the row's disclosure arrow instead, where there is room for text.
+    var showsTimeLeftBadge = false
 
     @State private var image: NSImage?
 
@@ -669,12 +732,6 @@ private struct MediaCover: View {
                     .foregroundStyle(.white)
                     .padding(8)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-            } else if image != nil {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(10)
-                    .background(.black.opacity(0.5), in: Circle())
             }
 
             if !isFolder {
@@ -708,6 +765,18 @@ private struct MediaCover: View {
             }
         }
 
+        if showsTimeLeftBadge, let timeLeftText = progress?.timeLeftText {
+            Text(timeLeftText)
+                .font(.caption2.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(.black.opacity(0.6), in: Capsule())
+                .padding(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        }
+
         // The watched badge and the hover affordance are the same view in the same
         // slot, so toggling hover never shifts the circle.
         if isWatched || showsWatchedAffordance {
@@ -721,14 +790,13 @@ private struct MediaCover: View {
     private var watchedBadge: some View {
         ZStack {
             Circle()
-                .fill(isWatched ? Color.accentColor : .black.opacity(0.5))
+                .fill(.black.opacity(0.5))
+            Circle()
+                .strokeBorder(.white.opacity(0.85), lineWidth: 1.5)
             if isWatched {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
-            } else {
-                Circle()
-                    .strokeBorder(.white.opacity(0.9), lineWidth: 1.5)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.9))
             }
         }
         .frame(width: 24, height: 24)

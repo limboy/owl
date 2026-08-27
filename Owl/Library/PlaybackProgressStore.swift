@@ -13,6 +13,26 @@ struct PlaybackProgress: Codable, Equatable, Identifiable, Sendable {
         guard duration.isFinite, duration > 0 else { return 0 }
         return min(max(position / duration, 0), 1)
     }
+
+    /// How much of the file is still ahead, phrased for a browser row.
+    ///
+    /// Only a file that has been started and not finished has an answer worth
+    /// showing: an untouched file's "time left" is just its running time, which
+    /// the row already states, and a finished one has none left at all.
+    var timeLeftText: String? {
+        guard !isCompleted, fraction > 0 else { return nil }
+        let remaining = duration - position
+        guard remaining.isFinite, remaining > 0 else { return nil }
+
+        let totalMinutes = Int((remaining / 60).rounded())
+        guard totalMinutes >= 1 else { return "<1m left" }
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)h \(minutes)m left" : "\(hours)h left"
+        }
+        return "\(minutes)m left"
+    }
 }
 
 @MainActor
