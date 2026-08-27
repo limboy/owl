@@ -9,6 +9,7 @@ struct FolderBrowserView: View {
 
     @ObservedObject var appModel: AppModel
     @ObservedObject private var library: FolderLibrary
+    @ObservedObject private var playerState: PlayerState
     @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
     @State private var isDropTargeted = false
     @State private var selectedRootID: UUID?
@@ -21,6 +22,7 @@ struct FolderBrowserView: View {
     init(appModel: AppModel, library: FolderLibrary) {
         self.appModel = appModel
         _library = ObservedObject(wrappedValue: library)
+        _playerState = ObservedObject(wrappedValue: appModel.playerState)
     }
 
     var body: some View {
@@ -41,6 +43,11 @@ struct FolderBrowserView: View {
                         layoutPicker
                     }
                 }
+                // The toolbar is drawn in the title bar, above the content, so
+                // a picture that covers the window would still be picked at by
+                // the layout control. There is no layout to choose while the
+                // video is up.
+                .toolbar(playerState.hasMedia ? .hidden : .automatic, for: .windowToolbar)
         }
         .navigationSplitViewStyle(.balanced)
         .coordinateSpace(.named(Self.splitSpace))

@@ -111,5 +111,9 @@ private struct PlayerLayout: View {
         // The window follows the system, but the picture is always on black,
         // and controls laid over black are read in the dark.
         .environment(\.colorScheme, .dark)
+        // The picture takes the whole window, title bar strip included. The
+        // browser's header and toolbar are what the video is playing instead
+        // of, so it covers them rather than sitting below them.
+        .ignoresSafeArea()
     }
 }
