@@ -14,6 +14,9 @@ struct PlayerContainerView: View {
     /// shuffle a list of one.
     let showsQueueControls: Bool
 
+    /// Whether this host can dismiss the current video.
+    let showsCloseButton: Bool
+
     @ObservedObject private var state: PlayerState
     @ObservedObject private var queue: PlaybackQueue
     @State private var controlsVisible = true
@@ -31,7 +34,8 @@ struct PlayerContainerView: View {
         videoView: OwlVideoView,
         windowState: WindowState,
         isVideoSurfaceActive: Bool = true,
-        showsQueueControls: Bool = true
+        showsQueueControls: Bool = true,
+        showsCloseButton: Bool = false
     ) {
         self.appModel = appModel
         self.engine = engine
@@ -39,6 +43,7 @@ struct PlayerContainerView: View {
         self.windowState = windowState
         self.isVideoSurfaceActive = isVideoSurfaceActive
         self.showsQueueControls = showsQueueControls
+        self.showsCloseButton = showsCloseButton
         _state = ObservedObject(wrappedValue: appModel.playerState)
         _queue = ObservedObject(wrappedValue: appModel.playbackQueue)
     }
@@ -129,6 +134,28 @@ struct PlayerContainerView: View {
             .animation(.easeOut(duration: 0.18), value: state.errorMessage)
             .animation(.easeOut(duration: 0.18), value: subtitleDelayIndicatorVisible)
         }
+        .overlay(alignment: .topTrailing) {
+            if showsCloseButton, state.hasMedia, isVideoSurfaceActive {
+                Button {
+                    withAnimation(.spring(response: 0.38, dampingFraction: 0.9)) {
+                        appModel.closeVideo()
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Close Video")
+                .accessibilityLabel("Close Video")
+                .opacity(controlsVisible ? 1 : 0)
+                .allowsHitTesting(controlsVisible)
+                .padding(16)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: controlsVisible)
         .onContinuousHover { phase in
             switch phase {
             case .active:

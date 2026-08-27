@@ -88,26 +88,10 @@ private struct PlayerLayout: View {
             videoView: videoView,
             windowState: windowState,
             isVideoSurfaceActive: !windowState.isFullscreen,
-            showsQueueControls: true
+            showsQueueControls: true,
+            showsCloseButton: true
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .topTrailing) {
-            Button {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.9)) {
-                    appModel.closeVideo()
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .semibold))
-                    .frame(width: 34, height: 34)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .help("Close Video")
-            .accessibilityLabel("Close Video")
-            .padding(16)
-        }
         // The window follows the system, but the picture is always on black,
         // and controls laid over black are read in the dark.
         .environment(\.colorScheme, .dark)
