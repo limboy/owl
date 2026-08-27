@@ -1,8 +1,16 @@
 # Changelog
 
 ## [Unreleased]
-- Cache parsed video metadata between launches so reopening large folders does not probe every file again
-- Add optional metadata sync, switched on from the browser's ellipsis menu: matched videos show the work's title, its description and its artwork in place of the file name and an extracted frame
+
+## [1.0.0] - 2026-08-27
+- Add optional metadata sync with TMDB, displaying matched titles, descriptions, and poster artwork
+- Cache parsed video metadata and folder cover images across launches to speed up library loading
+- Mark videos as watched or unwatched directly from the browser, with watched badges and progress indicators
+- Adapt the user interface to follow macOS light and dark appearance modes
+- Move playback options (shuffle, repeat) and layout picker to the window toolbar
+- Add "Show in Finder" context menu action for library root folders
+- Expand the video player to fill the window and automatically hide the toolbar during playback
+- Automatically select and focus newly added folders in the sidebar
 
 ## [0.3.2] - 2026-08-11
 - Add Increase/Decrease/Reset Subtitle Delay to the subtitle menu, with a HUD showing the current delay; the chosen delay is remembered per file and reapplied when it's reopened
