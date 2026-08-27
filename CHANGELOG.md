@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-27
+- Improve contrast and visibility of the video player controls and scrubber
+- Adjust grid item size and subtitle font in the library browser for improved spacing and readability
+- Remove redundant fullscreen player overlay toggle from controls
+- Update playback speed menu icon to a gauge and remove hover tooltips in video list
+
 ## [1.0.1] - 2026-08-27
 - Improve reliability of local installation and app replacement
 
