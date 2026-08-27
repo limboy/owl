@@ -32,6 +32,15 @@ struct FolderBrowserView: View {
             browserDetail
                 .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(.container, edges: .top)
+                .toolbar {
+                    // Without the spacer the picker lands right beside the
+                    // sidebar toggle, on top of the header's title.
+                    ToolbarSpacer(.flexible)
+
+                    ToolbarItem(placement: .primaryAction) {
+                        layoutPicker
+                    }
+                }
         }
         .navigationSplitViewStyle(.balanced)
         .coordinateSpace(.named(Self.splitSpace))
@@ -174,6 +183,12 @@ struct FolderBrowserView: View {
 
     /// How far into the window the window buttons and the sidebar toggle reach.
     private static let titleBarControlsWidth: CGFloat = 156
+
+    /// How much of the trailing title bar strip the layout picker takes up.
+    /// The header runs up under the title bar, so the title has to stop short
+    /// of the toolbar rather than truncate beneath it.
+    private static let layoutControlWidth: CGFloat = 104
+
     private static let splitSpace = "BrowserSplit"
 
     /// How far in the header has to start. The window hides its title bar and
@@ -221,25 +236,29 @@ struct FolderBrowserView: View {
             }
 
             Spacer(minLength: 16)
-
-            Picker("Layout", selection: Binding(
-                get: { layout },
-                set: { layout = $0 }
-            )) {
-                Image(systemName: "square.grid.2x2").tag(Layout.grid)
-                Image(systemName: "list.bullet").tag(Layout.list)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 76)
-            .help("Choose Grid or List View")
         }
         .padding(.leading, headerLeadingInset)
-        .padding(.trailing, 12)
+        .padding(.trailing, Self.layoutControlWidth)
         .frame(height: 58)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.frame(in: .named(Self.splitSpace)).minX
         } action: { headerOriginX = $0 }
+    }
+
+    /// The Grid/List toggle. It lives in the window toolbar so it picks up the
+    /// system's segmented look and sits in the title bar strip beside the
+    /// window's own controls.
+    private var layoutPicker: some View {
+        Picker("Layout", selection: Binding(
+            get: { layout },
+            set: { layout = $0 }
+        )) {
+            Image(systemName: "square.grid.2x2").tag(Layout.grid)
+            Image(systemName: "list.bullet").tag(Layout.list)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .help("Choose Grid or List View")
     }
 
     private var detailTitle: String {
