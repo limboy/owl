@@ -22,7 +22,6 @@ struct ContentView: View {
                 )
             }
         }
-        .preferredColorScheme(.dark)
         .background {
             ActivePlayerTracker(
                 target: PlayerTarget(appModel: appModel, windowState: windowState)
@@ -109,5 +108,8 @@ private struct PlayerLayout: View {
             .accessibilityLabel("Close Video")
             .padding(16)
         }
+        // The window follows the system, but the picture is always on black,
+        // and controls laid over black are read in the dark.
+        .environment(\.colorScheme, .dark)
     }
 }

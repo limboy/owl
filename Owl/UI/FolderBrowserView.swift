@@ -541,7 +541,7 @@ private struct LibraryGridButton: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(.white.opacity(0.1))
+                            .strokeBorder(Color.primary.opacity(0.1))
                     }
                     .onGeometryChange(for: CGRect.self) { proxy in
                         proxy.frame(in: .named(Self.hoverSpace))
@@ -629,7 +629,7 @@ private struct LibraryListButton: View {
                     .clipShape(RoundedRectangle(cornerRadius: 7))
                     .overlay {
                         RoundedRectangle(cornerRadius: 7)
-                            .strokeBorder(.white.opacity(0.08))
+                            .strokeBorder(Color.primary.opacity(0.08))
                     }
                     .onGeometryChange(for: CGRect.self) { proxy in
                         proxy.frame(in: .named(Self.hoverSpace))
@@ -742,17 +742,12 @@ private struct MediaCover: View {
     var showsTimeLeftBadge = false
 
     @State private var image: NSImage?
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(nsColor: .underPageBackgroundColor), .black.opacity(0.88)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(placeholderFill)
 
             if let image {
                 Image(nsImage: image)
@@ -786,6 +781,16 @@ private struct MediaCover: View {
         .task(id: source) {
             image = await loadImage()
         }
+    }
+
+    /// What sits under artwork that hasn't loaded, or that a folder never has.
+    /// Artwork is its own picture either way, so the empty cover is a shade of
+    /// the page it is on rather than a panel of a fixed color.
+    private var placeholderFill: LinearGradient {
+        let colors: [Color] = colorScheme == .dark
+            ? [Color(nsColor: .underPageBackgroundColor), .black.opacity(0.88)]
+            : [Color(white: 0.90), Color(white: 0.76)]
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     private var isWatched: Bool { progress?.isCompleted == true }
