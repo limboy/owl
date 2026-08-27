@@ -16,10 +16,10 @@ final class MediaThumbnailProvider {
         case external
     }
 
-    /// How far into a file a cover frame is taken from. Far enough in to clear
-    /// a black leader or a studio logo, close enough that a short clip still
-    /// has something there.
-    static let coverSeconds = 10
+    /// How far into a file a cover frame is taken from when the file will not
+    /// say how long it is. Far enough in to clear a black leader or a studio
+    /// logo, close enough that a short clip still has something there.
+    static let fallbackCoverSeconds = 10
 
     private let cache = NSCache<NSString, NSImage>()
     private let external: ExternalThumbnailRenderer
@@ -81,13 +81,14 @@ final class MediaThumbnailProvider {
     /// browser can fill a folder from the cache instead of decoding, or
     /// spawning a process for, every file in it again.
     func coverImage(for url: URL) async -> NSImage? {
-        let seconds = Double(Self.coverSeconds)
+        let bucket = Self.coverSeconds(forDuration: await Self.duration(of: url))
+        let seconds = Double(bucket)
         let key = Self.key(path: url.standardizedFileURL.path, seconds: seconds)
         if let cached = cache.object(forKey: key) {
             return cached
         }
 
-        if let data = await coverCache.data(for: url, at: Self.coverSeconds),
+        if let data = await coverCache.data(for: url, at: bucket),
            let stored = NSImage(data: data) {
             cache.setObject(stored, forKey: key)
             return stored
@@ -95,9 +96,34 @@ final class MediaThumbnailProvider {
 
         guard let image = await image(for: url, at: seconds) else { return nil }
         if let data = Self.jpegData(from: image) {
-            await coverCache.store(data, for: url, at: Self.coverSeconds)
+            await coverCache.store(data, for: url, at: bucket)
         }
         return image
+    }
+
+    /// Where in a file its cover frame comes from: a quarter of the way in.
+    ///
+    /// A fixed offset serves the two ends of a library badly. Ten seconds into
+    /// a feature is still the distributor's logo, and ten seconds into a clip
+    /// that runs eight is nothing at all. A quarter of the running time is past
+    /// the opening of a long file and inside a short one, and because it is a
+    /// fraction of a duration the file itself reports, it stays the same frame
+    /// for as long as the file is untouched — which is what lets a cover be
+    /// kept on disk.
+    static func coverSeconds(forDuration duration: Double?) -> Int {
+        guard let duration, duration.isFinite, duration > 0 else {
+            return fallbackCoverSeconds
+        }
+        return max(0, Int((duration / 4).rounded()))
+    }
+
+    /// How long the file runs, or `nil` when nothing can open it. This is the
+    /// same parse the browser rows are already showing, and it is cached on
+    /// disk, so asking here usually costs a file read rather than a probe.
+    private static func duration(of url: URL) async -> Double? {
+        await Task.detached(priority: .utility) {
+            await MediaMetadata.load(for: url)?.duration
+        }.value
     }
 
     func image(for url: URL, at seconds: Double) async -> NSImage? {

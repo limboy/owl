@@ -85,6 +85,19 @@ final class MediaThumbnailProviderTests: XCTestCase {
         XCTAssertNotNil(restored)
     }
 
+    func testACoverComesFromAQuarterOfTheWayIn() {
+        XCTAssertEqual(MediaThumbnailProvider.coverSeconds(forDuration: 4_800), 1_200)
+        XCTAssertEqual(MediaThumbnailProvider.coverSeconds(forDuration: 8), 2)
+    }
+
+    func testAFileThatWillNotSayHowLongItIsFallsBackToTheFixedOffset() {
+        let fallback = MediaThumbnailProvider.fallbackCoverSeconds
+        XCTAssertEqual(MediaThumbnailProvider.coverSeconds(forDuration: nil), fallback)
+        XCTAssertEqual(MediaThumbnailProvider.coverSeconds(forDuration: 0), fallback)
+        XCTAssertEqual(MediaThumbnailProvider.coverSeconds(forDuration: .nan), fallback)
+        XCTAssertEqual(MediaThumbnailProvider.coverSeconds(forDuration: .infinity), fallback)
+    }
+
     func testOnlyContainersAVFoundationClaimsAreProbed() {
         XCTAssertTrue(MediaThumbnailProvider.isAudiovisualType(URL(fileURLWithPath: "/a/clip.mp4")))
         XCTAssertTrue(MediaThumbnailProvider.isAudiovisualType(URL(fileURLWithPath: "/a/clip.MOV")))
