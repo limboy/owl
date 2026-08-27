@@ -1,7 +1,8 @@
 import AVFoundation
+import CryptoKit
 import Foundation
 
-struct MediaMetadata: Equatable, Sendable {
+struct MediaMetadata: Codable, Equatable, Sendable {
     let fileSize: Int64
     let duration: Double?
     let width: Int?
@@ -52,7 +53,15 @@ struct MediaMetadata: Equatable, Sendable {
     /// the thumbnails already fall back to. With neither installed the row
     /// keeps its file size, which is read from the filesystem and does not
     /// depend on anything being able to open the file.
-    static func load(for url: URL) async -> MediaMetadata? {
+    static func load(
+        for url: URL,
+        cache: MediaMetadataCache = .shared
+    ) async -> MediaMetadata? {
+        let url = url.standardizedFileURL
+        if let cached = await cache.metadata(for: url) {
+            return cached
+        }
+
         let values = try? url.resourceValues(forKeys: [.fileSizeKey])
         let fileSize = Int64(values?.fileSize ?? 0)
         let asset = AVURLAsset(url: url)
@@ -66,8 +75,7 @@ struct MediaMetadata: Equatable, Sendable {
         var seconds = duration.isFinite && duration > 0 ? duration : nil
 
         if videoTrack == nil || seconds == nil,
-           let probed = await ExternalMediaProbe.metadata(for: url)
-        {
+           let probed = await ExternalMediaProbe.metadata(for: url) {
             seconds = seconds ?? probed.duration.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
             width = width ?? probed.width
             height = height ?? probed.height
@@ -77,12 +85,124 @@ struct MediaMetadata: Equatable, Sendable {
         if fileSize == 0, seconds == nil, width == nil {
             return nil
         }
-        return MediaMetadata(
+        let metadata = MediaMetadata(
             fileSize: fileSize,
             duration: seconds,
             width: width,
             height: height,
             frameRate: frameRate
         )
+        // Do not make a temporary parser or tool failure persistent. A file
+        // size alone is cheap to recover and is not parsed media metadata.
+        if seconds != nil || width != nil || height != nil || frameRate != nil {
+            await cache.store(metadata, for: url)
+        }
+        return metadata
+    }
+}
+
+/// Parsed media facts kept on disk between launches.
+///
+/// Parsing can start an ffprobe or mpv process for every video in a folder.
+/// The cache key includes the file's size and modification date, so reopening
+/// an unchanged folder is cheap while a replaced or re-encoded file is parsed
+/// again.
+actor MediaMetadataCache {
+    static let shared = MediaMetadataCache()
+    static let maximumEntryCount = 2_000
+
+    private static let sweepInterval = 64
+
+    private let directory: URL
+    private let fileManager: FileManager
+    private var hasSwept = false
+    private var writesSinceSweep = 0
+
+    init(directory: URL? = nil, fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+        if let directory {
+            self.directory = directory
+        } else {
+            let caches = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            self.directory = caches
+                .appendingPathComponent("Owl", isDirectory: true)
+                .appendingPathComponent("Metadata", isDirectory: true)
+        }
+    }
+
+    func metadata(for url: URL) -> MediaMetadata? {
+        guard let entryURL = entryURL(for: url),
+              let data = try? Data(contentsOf: entryURL)
+        else {
+            return nil
+        }
+        return try? JSONDecoder().decode(MediaMetadata.self, from: data)
+    }
+
+    func store(_ metadata: MediaMetadata, for url: URL) {
+        guard let entryURL = entryURL(for: url),
+              let data = try? JSONEncoder().encode(metadata)
+        else {
+            return
+        }
+
+        do {
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            try data.write(to: entryURL, options: .atomic)
+        } catch {
+            // A failed cache write only means the file is parsed next time.
+            return
+        }
+
+        writesSinceSweep += 1
+        if !hasSwept || writesSinceSweep >= Self.sweepInterval {
+            sweep()
+        }
+    }
+
+    private func entryURL(for url: URL) -> URL? {
+        // URL caches resource values. Rebuild it from the path so a URL kept by
+        // the browser cannot make an edited file look unchanged.
+        let path = url.standardizedFileURL.path
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+        guard let values = try? URL(fileURLWithPath: path).resourceValues(forKeys: keys),
+              let size = values.fileSize,
+              let modified = values.contentModificationDate
+        else {
+            return nil
+        }
+
+        let identity = [
+            path,
+            String(size),
+            String(modified.timeIntervalSince1970)
+        ].joined(separator: "\n")
+        let digest = SHA256.hash(data: Data(identity.utf8))
+        let name = digest.map { String(format: "%02x", $0) }.joined() + ".json"
+        return directory.appendingPathComponent(name)
+    }
+
+    private func sweep() {
+        hasSwept = true
+        writesSinceSweep = 0
+
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let entries = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        ), entries.count > Self.maximumEntryCount else {
+            return
+        }
+
+        let dated = entries.map { url in
+            let written = (try? url.resourceValues(forKeys: Set(keys)))?.contentModificationDate
+            return (url: url, written: written ?? .distantPast)
+        }
+        .sorted { $0.written < $1.written }
+
+        for entry in dated.prefix(entries.count - Self.maximumEntryCount) {
+            try? fileManager.removeItem(at: entry.url)
+        }
     }
 }

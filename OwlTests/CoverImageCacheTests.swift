@@ -65,6 +65,44 @@ final class CoverImageCacheTests: XCTestCase {
         XCTAssertNil(stored, "A file that cannot be measured has no identity to key a cover on.")
     }
 
+    func testParsedMetadataSurvivesANewCacheAndSkipsParsing() async throws {
+        let video = try makeVideo(named: "lesson.mkv", contents: "one")
+        let directory = temporaryDirectory.appendingPathComponent("Metadata", isDirectory: true)
+        let expected = MediaMetadata(
+            fileSize: 3,
+            duration: 2_481,
+            width: 1_920,
+            height: 1_080,
+            frameRate: 24
+        )
+
+        await MediaMetadataCache(directory: directory).store(expected, for: video)
+        let restoredCache = MediaMetadataCache(directory: directory)
+        let loaded = await MediaMetadata.load(for: video, cache: restoredCache)
+
+        XCTAssertEqual(loaded, expected)
+    }
+
+    func testChangingTheVideoInvalidatesItsParsedMetadata() async throws {
+        let video = try makeVideo(named: "lesson.mkv", contents: "one")
+        let cache = MediaMetadataCache(
+            directory: temporaryDirectory.appendingPathComponent("Metadata", isDirectory: true)
+        )
+        let metadata = MediaMetadata(
+            fileSize: 3,
+            duration: 2_481,
+            width: 1_920,
+            height: 1_080,
+            frameRate: 24
+        )
+
+        await cache.store(metadata, for: video)
+        try Data("a longer re-encode".utf8).write(to: video)
+
+        let stale = await cache.metadata(for: video)
+        XCTAssertNil(stale, "A rewritten file must be parsed again.")
+    }
+
     func testFolderCoverIsRememberedAcrossLaunches() async throws {
         let folder = temporaryDirectory.appendingPathComponent("Season 1", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
