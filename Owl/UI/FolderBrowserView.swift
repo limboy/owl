@@ -213,7 +213,8 @@ struct FolderBrowserView: View {
             .frame(width: 76)
             .help("Choose Grid or List View")
         }
-        .padding(.horizontal, 20)
+        .padding(.leading, layout == .grid ? 24 : 18)
+        .padding(.trailing, 12)
         .frame(height: 58)
     }
 
