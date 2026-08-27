@@ -39,7 +39,7 @@ struct OwlApp: App {
     var body: some Scene {
         WindowGroup("Owl") {
             ContentView(appModel: appModel, windowState: windowState, library: library)
-                .frame(minWidth: 480, minHeight: 560)
+                .frame(minWidth: 720, minHeight: 560)
                 .background {
                     WindowFrameAutosave(key: "MainWindowFrame")
                         .frame(width: 0, height: 0)
@@ -48,6 +48,7 @@ struct OwlApp: App {
                 }
         }
         .defaultSize(width: 1_080, height: 760)
+        .windowStyle(.hiddenTitleBar)
         // A window group answers every file the app is asked to open by opening
         // one of itself, on top of the folder window already up and beside the
         // window the file is really going to. The files are the delegate's to

@@ -2,12 +2,12 @@ name: Owl
 options:
   bundleIdPrefix: me.limboy
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "26.0"
   createIntermediateGroups: true
 settings:
   base:
     ARCHS: arm64
-    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: minimal
     OTHER_SWIFT_FLAGS:

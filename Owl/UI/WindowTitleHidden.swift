@@ -1,8 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Hides the host window's title text while keeping the title bar itself
-/// (and the traffic-light buttons) in place.
+/// Hides the host window's title text while keeping the title bar controls.
 ///
 /// `WindowGroup`'s title also names the window in the Window menu and
 /// Mission Control, so it can't simply be left blank; this hides only its

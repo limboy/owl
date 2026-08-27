@@ -39,21 +39,35 @@ private struct PlayerLayout: View {
     @ObservedObject var windowState: WindowState
     let library: FolderLibrary
 
-    var body: some View {
-        VSplitView {
-            PlayerContainerView(
-                appModel: appModel,
-                engine: engine,
-                videoView: videoView,
-                windowState: windowState,
-                isVideoSurfaceActive: !windowState.isFullscreen
-            )
-            .frame(minHeight: 280)
+    @ObservedObject private var state: PlayerState
 
+    init(
+        appModel: AppModel,
+        engine: MPVPlayerEngine,
+        videoView: OwlVideoView,
+        windowState: WindowState,
+        library: FolderLibrary
+    ) {
+        self.appModel = appModel
+        self.engine = engine
+        self.videoView = videoView
+        self.windowState = windowState
+        self.library = library
+        _state = ObservedObject(wrappedValue: appModel.playerState)
+    }
+
+    var body: some View {
+        ZStack {
             FolderBrowserView(appModel: appModel, library: library)
-                .frame(minHeight: 215, idealHeight: 285)
+
+            if state.hasMedia {
+                playerOverlay
+                    .zIndex(1)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
-        .background(Color.black)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .animation(.spring(response: 0.42, dampingFraction: 0.88), value: state.hasMedia)
         .onAppear {
             windowState.attachVideoView(videoView)
         }
@@ -65,6 +79,35 @@ private struct PlayerLayout: View {
                 windowState: windowState,
                 showsQueueControls: true
             )
+        }
+    }
+
+    private var playerOverlay: some View {
+        PlayerContainerView(
+            appModel: appModel,
+            engine: engine,
+            videoView: videoView,
+            windowState: windowState,
+            isVideoSurfaceActive: !windowState.isFullscreen,
+            showsQueueControls: true
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .topTrailing) {
+            Button {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.9)) {
+                    appModel.closeVideo()
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Close Video")
+            .accessibilityLabel("Close Video")
+            .padding(16)
         }
     }
 }

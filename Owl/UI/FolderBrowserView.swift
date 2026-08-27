@@ -2,435 +2,396 @@ import AppKit
 import SwiftUI
 
 struct FolderBrowserView: View {
+    private enum Layout: String {
+        case grid
+        case list
+    }
+
     @ObservedObject var appModel: AppModel
     @ObservedObject private var library: FolderLibrary
+    @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
     @State private var isDropTargeted = false
+    @State private var selectedRootID: UUID?
 
-    /// The row the arrow keys are moving over. Free to diverge from what is
-    /// playing — browsing ahead of what is on screen is the point of it —
-    /// but follows along whenever the app itself is the one moving playback,
-    /// via `library.selectedVideo` below.
-    @State private var selection: URL?
-    @FocusState private var isListFocused: Bool
-
-    /// Mirrors `selection` only when something other than the user moved it —
-    /// `normalizeSelection`, `goBack`, and playback tracking. The list scrolls
-    /// to keep this row centered; a click or an arrow key leaves it alone, so
-    /// the view doesn't jump out from under someone who is already looking at
-    /// the row they just picked.
-    @State private var autoScrollTarget: URL?
-
-    /// Held, deliberately, without observing it. The only things here that move
-    /// with playback are one row's percentage and one row's highlight, and both
-    /// live in leaves of their own. Observing the player from the browser
-    /// itself would rebuild every row in the folder each time the clock ticks.
-    private let state: PlayerState
+    private let gridColumns = [
+        GridItem(.adaptive(minimum: 180, maximum: 280), spacing: 18, alignment: .top)
+    ]
 
     init(appModel: AppModel, library: FolderLibrary) {
         self.appModel = appModel
         _library = ObservedObject(wrappedValue: library)
-        state = appModel.playerState
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            browserHeader
-            Divider()
-            browserContent
-            Divider()
-            statusBar
+        NavigationSplitView {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 300)
+                .ignoresSafeArea(.container, edges: .top)
+        } detail: {
+            browserDetail
+                .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(.container, edges: .top)
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .navigationSplitViewStyle(.balanced)
+        .background(Color(nsColor: .windowBackgroundColor))
         .overlay {
             if isDropTargeted {
-                RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [8]))
-                    .padding(6)
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [9, 6]))
+                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                    .padding(10)
                     .allowsHitTesting(false)
+                    .transition(.opacity)
             }
         }
         .dropDestination(for: URL.self) { urls, _ in
             accept(urls)
         } isTargeted: { targeted in
-            isDropTargeted = targeted
+            withAnimation(.easeOut(duration: 0.15)) {
+                isDropTargeted = targeted
+            }
         }
-        .onChange(of: library.entries) { _, _ in normalizeSelection() }
-        .onChange(of: library.roots) { _, _ in normalizeSelection() }
-        // Keeps the row the keyboard sits on in step with whatever the
-        // transport controls just moved playback to — Previous/Next and
-        // auto-advance change this without going through `selectFromClick`.
-        // Skipped when it already matches `selection`: that means a click
-        // just put it there, and the row is already where the user put it.
-        .onChange(of: library.selectedVideo) { _, newValue in
-            if let newValue, newValue != selection { moveSelection(to: newValue) }
+        .alert(
+            "Owl Couldn’t Complete That Action",
+            isPresented: Binding(
+                get: { library.errorMessage != nil },
+                set: { if !$0 { library.errorMessage = nil } }
+            )
+        ) {
+            Button("OK") { library.errorMessage = nil }
+        } message: {
+            Text(library.errorMessage ?? "")
         }
-        .onAppear(perform: normalizeSelection)
-    }
-
-    /// Takes what was dropped on the browser: folders join the library, and a
-    /// video file opens in a window of its own rather than pushing aside what
-    /// is playing here.
-    private func accept(_ urls: [URL]) -> Bool {
-        let media = urls.filter { FolderLibrary.isVideo($0) }
-        let folders = urls.filter { !media.contains($0) }
-
-        let added = library.addFolders(folders)
-        for file in media {
-            FilePlayerWindows.shared.open(file)
-        }
-        return added || !media.isEmpty
-    }
-
-    /// Keeps the arrow keys pointed at a row that is still there, and gives
-    /// them somewhere to start from in a folder that has just been opened.
-    private func normalizeSelection() {
-        let available = library.isAtRootList
-            ? library.roots.map(\.url)
-            : library.entries.map(\.url)
-        if selection == nil || !available.contains(selection!) {
-            moveSelection(to: available.first)
+        .onAppear(perform: synchronizeSelection)
+        .onChange(of: library.roots) { _, _ in
+            synchronizeSelection()
         }
     }
 
-    /// Leaves the current folder for the list above it, and keeps the keyboard
-    /// on the row that was just backed out of rather than letting
-    /// `normalizeSelection` snap it back to the top of that list.
-    private func goBack() {
-        let leftDirectory = library.currentDirectory
-        library.goBack()
-        if let leftDirectory {
-            moveSelection(to: leftDirectory)
+    private var layout: Layout {
+        get { Layout(rawValue: storedLayout) ?? .grid }
+        nonmutating set { storedLayout = newValue.rawValue }
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+
+                Button(action: chooseFolders) {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 14, weight: .medium))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help("Add Folder")
+                .accessibilityLabel("Add Folder")
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 48)
+            .frame(height: 44)
+
+            List(selection: rootSelection) {
+                Section("Folders") {
+                    ForEach(library.roots) { root in
+                        Label {
+                            Text(root.displayName)
+                                .foregroundStyle(root.isAvailable ? .primary : .secondary)
+                        } icon: {
+                            Image(systemName: root.isAvailable ? "folder" : "folder.badge.questionmark")
+                                .symbolRenderingMode(.hierarchical)
+                        }
+                        .tag(root.id)
+                        .contextMenu {
+                            if !root.isAvailable {
+                                Button("Reconnect…") { reconnect(root) }
+                            }
+                            Button("Remove Folder", role: .destructive) {
+                                library.removeRoot(id: root.id)
+                            }
+                        }
+                    }
+                }
+            }
+            .listStyle(.sidebar)
         }
     }
 
-    /// Moves the selection on the app's own initiative — as opposed to
-    /// `selectFromClick` or the list's own arrow-key handling, which are the
-    /// user doing it — and asks the list to scroll the row into view.
-    private func moveSelection(to url: URL?) {
-        selection = url
-        autoScrollTarget = url
+    private var rootSelection: Binding<UUID?> {
+        Binding(
+            get: { selectedRootID },
+            set: { rootID in
+                guard let rootID,
+                      let root = library.roots.first(where: { $0.id == rootID })
+                else { return }
+                select(root)
+            }
+        )
     }
 
-    private func openSelection() {
-        guard let selection else { return }
-        if library.isAtRootList {
-            guard let root = library.roots.first(where: { $0.url == selection }) else { return }
-            open(root)
-        } else {
-            guard let entry = library.entries.first(where: { $0.url == selection }) else { return }
-            open(entry)
+    private var itemCountText: String {
+        let count = library.entries.count
+        return "\(count) \(count == 1 ? "item" : "items")"
+    }
+
+    private var selectedRoot: LibraryRoot? {
+        guard let selectedRootID else { return nil }
+        return library.roots.first { $0.id == selectedRootID }
+    }
+
+    @ViewBuilder
+    private var browserDetail: some View {
+        VStack(spacing: 0) {
+            contentHeader
+
+            ZStack {
+                Color(nsColor: .windowBackgroundColor)
+
+                if library.roots.isEmpty {
+                    noFoldersState
+                } else if let selectedRoot, !selectedRoot.isAvailable {
+                    unavailableState(selectedRoot)
+                } else if selectedRoot == nil {
+                    chooseFolderState
+                } else if library.entries.isEmpty {
+                    emptyFolderState
+                } else {
+                    switch layout {
+                    case .grid:
+                        grid
+                    case .list:
+                        list
+                    }
+                }
+            }
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var contentHeader: some View {
+        HStack(spacing: 10) {
+            if library.navigationPath.count > 1 {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        library.goBack()
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help("Back")
+            }
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(detailTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                if selectedRoot != nil {
+                    Text(itemCountText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 16)
+
+            Picker("Layout", selection: Binding(
+                get: { layout },
+                set: { layout = $0 }
+            )) {
+                Image(systemName: "square.grid.2x2").tag(Layout.grid)
+                Image(systemName: "list.bullet").tag(Layout.list)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 76)
+            .help("Choose Grid or List View")
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 58)
+    }
+
+    private var detailTitle: String {
+        guard selectedRoot != nil else { return "Library" }
+        return library.currentTitle
+    }
+
+    private var noFoldersState: some View {
+        ContentUnavailableView {
+            Label("Build Your Library", systemImage: "rectangle.stack.badge.plus")
+        } description: {
+            Text("Add a video folder, or drag one anywhere into this window.")
+        } actions: {
+            Button("Add Folder…", action: chooseFolders)
+                .buttonStyle(.borderedProminent)
         }
     }
 
-    private func open(_ root: LibraryRoot) {
-        guard root.isAvailable else { return }
-        library.openRoot(root)
+    private var chooseFolderState: some View {
+        ContentUnavailableView {
+            Label("Choose a Folder", systemImage: "sidebar.left")
+        } description: {
+            Text("Select a folder in the sidebar to browse its videos.")
+        }
+    }
+
+    private var emptyFolderState: some View {
+        ContentUnavailableView(
+            "No Videos Here",
+            systemImage: "film.stack",
+            description: Text("This folder has no supported videos or subfolders.")
+        )
+    }
+
+    private func unavailableState(_ root: LibraryRoot) -> some View {
+        ContentUnavailableView {
+            Label("Folder Unavailable", systemImage: "externaldrive.badge.exclamationmark")
+        } description: {
+            Text("Reconnect \(root.displayName) to continue browsing it.")
+        } actions: {
+            Button("Reconnect…") { reconnect(root) }
+                .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 22) {
+                ForEach(library.entries) { entry in
+                    entryGridItem(entry)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 24)
+        }
+        .scrollIndicators(.automatic)
+    }
+
+    private var list: some View {
+        ScrollView {
+            LazyVStack(spacing: 2) {
+                ForEach(library.entries) { entry in
+                    entryListItem(entry)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .padding(.bottom, 18)
+        }
+    }
+
+    private func entryGridItem(_ entry: BrowserEntry) -> some View {
+        LibraryGridButton(
+            title: entry.name,
+            subtitle: subtitle(for: entry),
+            source: entry.kind == .folder ? .folder(entry.url) : .video(entry.url),
+            isFolder: entry.kind == .folder,
+            progress: entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil,
+            isEnabled: true,
+            action: { open(entry) }
+        )
+        .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
+    }
+
+    private func entryListItem(_ entry: BrowserEntry) -> some View {
+        LibraryListButton(
+            title: entry.name,
+            subtitle: entry.kind == .folder ? entry.url.path : nil,
+            source: entry.kind == .folder ? .folder(entry.url) : .video(entry.url),
+            isFolder: entry.kind == .folder,
+            progress: entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil,
+            trailingText: entry.kind == .video
+                ? library.metadata(for: entry.url)?.summaryParts.joined(separator: "  ·  ")
+                : nil,
+            isEnabled: true,
+            action: { open(entry) }
+        )
+        .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
+    }
+
+    private func subtitle(for entry: BrowserEntry) -> String {
+        switch entry.kind {
+        case .folder:
+            return "Folder"
+        case .video:
+            return library.metadata(for: entry.url)?.summaryParts.first ?? entry.url.pathExtension.uppercased()
+        }
+    }
+
+    private func select(_ root: LibraryRoot) {
+        selectedRootID = root.id
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if root.isAvailable {
+                library.openRoot(root)
+            } else {
+                library.goToRootList()
+            }
+        }
+    }
+
+    private func synchronizeSelection() {
+        if let pathRoot = library.navigationPath.first,
+           let root = library.roots.first(where: {
+               $0.url.standardizedFileURL == pathRoot.standardizedFileURL
+           }) {
+            selectedRootID = root.id
+            return
+        }
+
+        if let selectedRootID,
+           let root = library.roots.first(where: { $0.id == selectedRootID }) {
+            if library.isAtRootList, root.isAvailable {
+                library.openRoot(root)
+            }
+            return
+        }
+
+        guard let first = library.roots.first else {
+            selectedRootID = nil
+            library.goToRootList()
+            return
+        }
+        select(first)
     }
 
     private func open(_ entry: BrowserEntry) {
         switch entry.kind {
         case .folder:
-            library.openFolder(entry.url)
+            withAnimation(.easeInOut(duration: 0.2)) {
+                library.openFolder(entry.url)
+            }
         case .video:
-            appModel.play(
-                entry.url,
-                from: library.visibleVideos,
-                directory: library.currentDirectory
-            )
-        }
-    }
-
-    /// Clicking a row moves the keyboard's place in the list to it and hands
-    /// the list focus, so the arrow keys carry on from wherever the mouse
-    /// left off rather than from the top.
-    private func selectFromClick(_ url: URL) {
-        selection = url
-        isListFocused = true
-    }
-
-    private var browserHeader: some View {
-        ViewThatFits(in: .horizontal) {
-            browserHeaderContent(showsItemCount: true)
-            browserHeaderContent(showsItemCount: false)
-        }
-        .padding(.horizontal, library.isAtRootList ? 16 : 10)
-        .frame(height: 42)
-    }
-
-    private func browserHeaderContent(showsItemCount: Bool) -> some View {
-        HStack(spacing: 6) {
-            if !library.isAtRootList {
-                Button {
-                    goBack()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Back")
-            }
-
-            Text(library.currentTitle)
-                .font(.headline)
-                .lineLimit(1)
-
-            Spacer()
-
-            if library.isAtRootList {
-                Button {
-                    chooseFolders()
-                } label: {
-                    Image(systemName: "plus")
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.plain)
-                .help("Add Folder")
-            }
-
-            if showsItemCount, !library.isAtRootList {
-                Text("\(library.entries.count) items")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize()
-            }
-
-        }
-    }
-
-    /// What is known about the selected row, along the bottom of the browser.
-    ///
-    /// The library has been reading this for every video it lists since before
-    /// there was anywhere to show it; the row itself has no space for more than
-    /// a name and how far in the viewer is.
-    private var statusBar: some View {
-        HStack(spacing: 10) {
-            // The floor is what the details are measured against: they may take
-            // the rest of the bar, but never the name's last 120 points. A name
-            // longer than what is left loses its middle, where the least of it
-            // is — the extension and the leading words survive.
-            Text(statusTitle)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(minWidth: 120, alignment: .leading)
-
-            Spacer(minLength: 0)
-
-            // Widest first: a bar too narrow for all of it gives up the file
-            // size, then the frame rate, and keeps the running time longest.
-            ViewThatFits(in: .horizontal) {
-                statusDetailText(statusDetails)
-                statusDetailText(Array(statusDetails.dropLast()))
-                statusDetailText(Array(statusDetails.prefix(1)))
-                Color.clear.frame(width: 0)
-            }
-            .layoutPriority(1)
-        }
-        .font(.caption)
-        .padding(.horizontal, 12)
-        .frame(height: 24)
-    }
-
-    private func statusDetailText(_ details: [String]) -> some View {
-        Text(details.joined(separator: "  ·  "))
-            .foregroundStyle(.secondary)
-            .monospacedDigit()
-            .lineLimit(1)
-            .fixedSize()
-    }
-
-    private var statusTitle: String {
-        if let selectedRoot {
-            return selectedRoot.url.path
-        }
-        if let selectedEntry {
-            return selectedEntry.name
-        }
-        return ""
-    }
-
-    private var statusDetails: [String] {
-        if let selectedRoot {
-            return selectedRoot.isAvailable ? [] : ["Unavailable"]
-        }
-        guard let selectedEntry else { return [] }
-        switch selectedEntry.kind {
-        case .folder:
-            return ["Folder"]
-        case .video:
-            // Empty until the read of the file comes back, rather than a row of
-            // placeholders that would only be replaced a moment later.
-            return library.metadata(for: selectedEntry.url)?.summaryParts ?? []
-        }
-    }
-
-    private var selectedRoot: LibraryRoot? {
-        guard library.isAtRootList, let selection else { return nil }
-        return library.roots.first { $0.url == selection }
-    }
-
-    private var selectedEntry: BrowserEntry? {
-        guard !library.isAtRootList, let selection else { return nil }
-        return library.entries.first { $0.url == selection }
-    }
-
-    @ViewBuilder
-    private var browserContent: some View {
-        if library.isAtRootList {
-            if library.roots.isEmpty {
-                ContentUnavailableView {
-                    Label("Drag a folder here", systemImage: "folder")
-                }
-            } else {
-                ScrollViewReader { proxy in
-                    List(selection: $selection) {
-                        ForEach(library.roots) { root in
-                            rootRow(root)
-                                .tag(root.url)
-                        }
-                    }
-                    .listStyle(.inset)
-                    .modifier(KeyboardNavigation(isFocused: $isListFocused, open: openSelection))
-                    .modifier(ScrollToSelection(target: autoScrollTarget, proxy: proxy))
-                }
-            }
-        } else if library.entries.isEmpty {
-            ContentUnavailableView(
-                "No Media Here",
-                systemImage: "film",
-                description: Text("This folder has no supported video files or subfolders.")
-            )
-        } else {
-            ScrollViewReader { proxy in
-                List(selection: $selection) {
-                    ForEach(library.entries) { entry in
-                        entryRow(entry)
-                            .tag(entry.url)
-                    }
-                }
-                .listStyle(.inset)
-                // Also the height the list assumes for every row it has not
-                // measured yet, so it must stay equal to what a row really
-                // measures. Any gap between the two is re-discovered whenever
-                // the rows are diffed — the first click, say — and the table
-                // resizes itself around the estimate mid-diff, throwing the
-                // scroll position an unpredictable distance for anyone deep
-                // in a long folder.
-                .environment(\.defaultMinListRowHeight, 32)
-                .modifier(KeyboardNavigation(isFocused: $isListFocused, open: openSelection))
-                .modifier(ScrollToSelection(target: autoScrollTarget, proxy: proxy))
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
+                appModel.play(
+                    entry.url,
+                    from: library.visibleVideos,
+                    directory: library.currentDirectory
+                )
             }
         }
     }
 
-    @ViewBuilder
-    private func rootRow(_ root: LibraryRoot) -> some View {
-        if root.isAvailable {
-            Button {
-                selectFromClick(root.url)
-                open(root)
-            } label: {
-                rootLabel(root)
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
-                Button("Remove Folder", role: .destructive) {
-                    library.removeRoot(id: root.id)
-                }
-            }
-        } else {
-            HStack(spacing: 10) {
-                Image(systemName: "folder.fill")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-                Text(root.displayName)
-                    .lineLimit(1)
-                Spacer()
-                Button("Reconnect") {
-                    reconnect(root)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-            .padding(.vertical, 4)
-            .contextMenu {
-                Button("Reconnect…") {
-                    reconnect(root)
-                }
-                Button("Remove Folder", role: .destructive) {
-                    library.removeRoot(id: root.id)
-                }
-            }
-        }
-    }
+    private func accept(_ urls: [URL]) -> Bool {
+        let videos = urls.filter(FolderLibrary.isVideo)
+        let folders = urls.filter { !videos.contains($0) }
+        let added = library.addFolders(folders)
 
-    private func rootLabel(_ root: LibraryRoot) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "folder.fill")
-                .foregroundStyle(Color.accentColor)
-                .frame(width: 22, height: 22)
-            Text(root.displayName)
-                .lineLimit(1)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .foregroundStyle(.tertiary)
+        if added,
+           let addedURL = folders.first?.standardizedFileURL,
+           let root = library.roots.first(where: { $0.url.standardizedFileURL == addedURL }) {
+            select(root)
         }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-    }
 
-    private func entryRow(_ entry: BrowserEntry) -> some View {
-        Button {
-            selectFromClick(entry.url)
-            open(entry)
-        } label: {
-            HStack(spacing: 10) {
-                if entry.kind == .folder {
-                    Image(systemName: "folder.fill")
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 22, height: 22)
-                } else {
-                    Image(systemName: "play.rectangle.fill")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 22, height: 22)
-                }
-                Text(entry.name)
-                    .lineLimit(1)
-                Spacer()
-                if entry.kind == .folder {
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.tertiary)
-                } else {
-                    PlaybackProgressIndicator(
-                        state: state,
-                        url: entry.url,
-                        stored: appModel.playbackProgress(for: entry.url)
-                    )
-                }
-            }
-            .contentShape(Rectangle())
-            .padding(.vertical, 4)
+        if let video = videos.first {
+            appModel.play(video, from: videos, directory: video.deletingLastPathComponent())
         }
-        .buttonStyle(.plain)
-        .listRowBackground(NowPlayingRowBackground(state: state, url: entry.url))
-        .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
-    }
-
-    /// Reveals the file in Finder rather than opening it — the row already
-    /// does that on click.
-    private func showInFinder(_ entry: BrowserEntry) {
-        NSWorkspace.shared.activateFileViewerSelecting([entry.url])
-    }
-
-    /// Trashes the underlying file. The row disappears on its own once the
-    /// folder watcher notices, rather than being removed here — that keeps
-    /// this in step with someone deleting the same file from Finder instead.
-    private func moveToTrash(_ entry: BrowserEntry) {
-        do {
-            try FileManager.default.trashItem(at: entry.url, resultingItemURL: nil)
-        } catch {
-            library.errorMessage = "Could not move \(entry.name) to Trash: \(error.localizedDescription)"
-        }
+        return added || !videos.isEmpty
     }
 
     private func chooseFolders() {
@@ -441,7 +402,15 @@ struct FolderBrowserView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = true
         panel.presentAsSheet { urls in
-            library.addFolders(urls)
+            guard library.addFolders(urls),
+                  let addedURL = urls.first?.standardizedFileURL,
+                  let root = library.roots.first(where: {
+                      $0.url.standardizedFileURL == addedURL
+                  })
+            else {
+                return
+            }
+            select(root)
         }
     }
 
@@ -457,116 +426,268 @@ struct FolderBrowserView: View {
             library.replaceRoot(id: root.id, with: url)
         }
     }
-}
 
-/// How far into one video the viewer is, for rows where that is worth saying at
-/// all: a bar for something part-watched, a tick for something finished, and
-/// nothing whatsoever for a file that has never been opened. A column of "0%"
-/// against every unwatched file was noise standing exactly where the eye looks
-/// to find the few rows that do carry a state.
-///
-/// Only the row being played moves, but every row asks the player whether it is
-/// that row, so this stays a leaf: a position update redraws a handful of small
-/// views instead of the whole browser.
-private struct PlaybackProgressIndicator: View {
-    @ObservedObject var state: PlayerState
-    let url: URL
-
-    /// What the row shows when it is not the one playing. Read from the
-    /// progress store by the browser, which redraws when the store changes.
-    let stored: PlaybackProgress?
-
-    private static let barWidth: CGFloat = 40
-
-    var body: some View {
-        content
-            .frame(width: 46, alignment: .trailing)
+    private func showInFinder(_ entry: BrowserEntry) {
+        NSWorkspace.shared.activateFileViewerSelecting([entry.url])
     }
 
-    @ViewBuilder
-    private var content: some View {
-        if isWatched {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .help("Watched")
-        } else if fraction > 0 {
-            Capsule()
-                .fill(.quaternary)
-                .frame(width: Self.barWidth, height: 4)
-                .overlay(alignment: .leading) {
-                    Capsule()
-                        .fill(.tint)
-                        .frame(width: Self.barWidth * fraction, height: 4)
+    private func moveToTrash(_ entry: BrowserEntry) {
+        do {
+            try FileManager.default.trashItem(at: entry.url, resultingItemURL: nil)
+        } catch {
+            library.errorMessage = "Could not move \(entry.name) to Trash: \(error.localizedDescription)"
+        }
+    }
+}
+
+private enum CoverSource: Hashable {
+    case folder(URL)
+    case video(URL)
+}
+
+private struct LibraryGridButton: View {
+    let title: String
+    let subtitle: String
+    let source: CoverSource
+    let isFolder: Bool
+    let progress: PlaybackProgress?
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 9) {
+                MediaCover(source: source, isFolder: isFolder, progress: progress)
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(.white.opacity(0.1))
+                    }
+
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(isEnabled ? .primary : .secondary)
+                    .lineLimit(1)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(LibraryItemButtonStyle())
+        .disabled(!isEnabled)
+    }
+}
+
+private struct LibraryListButton: View {
+    let title: String
+    let subtitle: String?
+    let source: CoverSource
+    let isFolder: Bool
+    let progress: PlaybackProgress?
+    let trailingText: String?
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                MediaCover(source: source, isFolder: isFolder, progress: progress)
+                    .frame(width: 112, height: 64)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 7)
+                            .strokeBorder(.white.opacity(0.08))
+                    }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(isEnabled ? .primary : .secondary)
+                        .lineLimit(1)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
-                .help("\(Int((fraction * 100).rounded(.down)))% watched")
+
+                Spacer(minLength: 12)
+
+                if let trailingText, !trailingText.isEmpty {
+                    Text(trailingText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+
+                Image(systemName: isFolder ? "chevron.right" : "play.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 18)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(LibraryItemButtonStyle())
+        .disabled(!isEnabled)
+    }
+}
+
+private struct LibraryItemButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                configuration.isPressed ? Color.primary.opacity(0.09) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 10)
+            )
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+private struct MediaCover: View {
+    let source: CoverSource
+    let isFolder: Bool
+    let progress: PlaybackProgress?
+
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(nsColor: .underPageBackgroundColor), .black.opacity(0.88)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: isFolder ? "folder.fill" : "film")
+                    .font(.system(size: isFolder ? 34 : 30, weight: .medium))
+                    .foregroundStyle(isFolder ? Color.accentColor : .secondary)
+            }
+
+            if isFolder {
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.58)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            } else if image != nil {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(10)
+                    .background(.black.opacity(0.5), in: Circle())
+            }
+
+            if !isFolder {
+                playbackStateOverlay
+            }
+        }
+        .clipped()
+        .accessibilityValue(playbackAccessibilityValue)
+        .task(id: source) {
+            image = await loadImage()
         }
     }
 
-    private var isPlayingThisRow: Bool {
-        state.currentURL?.standardizedFileURL == url.standardizedFileURL
-            && state.duration.isFinite
-            && state.duration > 0
-    }
-
-    /// Finished, and not being watched again right now — a rewatch shows its
-    /// own position rather than the tick left by the previous time through.
-    private var isWatched: Bool {
-        !isPlayingThisRow && stored?.isCompleted == true
-    }
-
-    private var fraction: Double {
-        guard isPlayingThisRow else { return stored?.fraction ?? 0 }
-        return min(max(state.currentTime / state.duration, 0), 1)
-    }
-}
-
-/// Focus and Return, shared by the folder browser's two lists.
-///
-/// The lists move their own selection with the arrow keys once they hold focus,
-/// which is why `PlayerKeyboardMonitor` hands the vertical arrows to whatever
-/// list is focused instead of turning them into volume.
-private struct KeyboardNavigation: ViewModifier {
-    @FocusState.Binding var isFocused: Bool
-    let open: () -> Void
-
-    func body(content: Content) -> some View {
-        content
-            .focused($isFocused)
-            .onKeyPress(.return) {
-                open()
-                return .handled
-            }
-    }
-}
-
-/// Keeps whichever row `target` names centered on screen. Only fed by
-/// `moveSelection(to:)` — the app moving the selection on its own, via
-/// `normalizeSelection`, `goBack`, or playback tracking — never by a click or
-/// an arrow key, so the list doesn't jump on the user while they're the one
-/// driving it. No animation, since an animated scroll on every auto-advance
-/// would fight the pace videos finish at.
-private struct ScrollToSelection: ViewModifier {
-    let target: URL?
-    let proxy: ScrollViewProxy
-
-    func body(content: Content) -> some View {
-        content
-            .onChange(of: target) { _, newValue in
-                guard let newValue else { return }
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    proxy.scrollTo(newValue, anchor: .center)
+    @ViewBuilder
+    private var playbackStateOverlay: some View {
+        if progress?.isCompleted == true {
+            Image(systemName: "checkmark")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(Color.accentColor, in: Circle())
+                .padding(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        } else if let progress, progress.fraction > 0 {
+            GeometryReader { proxy in
+                VStack(spacing: 0) {
+                    Spacer()
+                    ZStack(alignment: .leading) {
+                        Rectangle()
+                            .fill(.black.opacity(0.45))
+                        Rectangle()
+                            .fill(Color.accentColor)
+                            .frame(width: proxy.size.width * progress.fraction)
+                    }
+                    .frame(height: 4)
                 }
             }
+        }
+    }
+
+    private var playbackAccessibilityValue: String {
+        guard !isFolder, let progress else { return "" }
+        if progress.isCompleted { return "Watched" }
+        guard progress.fraction > 0 else { return "" }
+        return "\(Int((progress.fraction * 100).rounded(.down))) percent watched"
+    }
+
+    private func loadImage() async -> NSImage? {
+        let videoURL: URL?
+        switch source {
+        case .video(let url):
+            videoURL = url
+        case .folder(let url):
+            videoURL = await FolderCoverFinder.firstVideo(in: url)
+        }
+        guard !Task.isCancelled, let videoURL else { return nil }
+        return await MediaThumbnailProvider.shared.image(for: videoURL, at: 10)
     }
 }
 
-/// Right-click actions for a video row. Folders in the same list keep
-/// their own click-to-open behavior and get no menu here — there is nothing
-/// file-level to offer on something that is really just a place to navigate
-/// into.
+private enum FolderCoverFinder {
+    static func firstVideo(in directory: URL) async -> URL? {
+        await Task.detached(priority: .utility) {
+            let keys: Set<URLResourceKey> = [.isDirectoryKey, .isRegularFileKey, .isHiddenKey]
+            guard let enumerator = FileManager.default.enumerator(
+                at: directory,
+                includingPropertiesForKeys: Array(keys),
+                options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            ) else {
+                return nil
+            }
+
+            var inspected = 0
+            while let url = enumerator.nextObject() as? URL {
+                guard !Task.isCancelled else { return nil }
+                inspected += 1
+                if inspected > 600 { break }
+
+                let values = try? url.resourceValues(forKeys: keys)
+                if values?.isHidden == true { continue }
+                if values?.isRegularFile == true, FolderLibrary.isVideo(url) {
+                    return url.standardizedFileURL
+                }
+            }
+            return nil
+        }.value
+    }
+}
+
 private struct EntryContextMenu: ViewModifier {
     let entry: BrowserEntry
     let showInFinder: (BrowserEntry) -> Void
@@ -577,24 +698,10 @@ private struct EntryContextMenu: ViewModifier {
             content
         } else {
             content.contextMenu {
-                Button("Show in Finder") {
-                    showInFinder(entry)
-                }
+                Button("Show in Finder") { showInFinder(entry) }
                 Divider()
-                Button("Move to Trash", role: .destructive) {
-                    moveToTrash(entry)
-                }
+                Button("Move to Trash", role: .destructive) { moveToTrash(entry) }
             }
         }
-    }
-}
-
-/// Marks the row being played. A leaf for the same reason as the label.
-private struct NowPlayingRowBackground: View {
-    @ObservedObject var state: PlayerState
-    let url: URL
-
-    var body: some View {
-        state.currentURL == url ? Color.accentColor.opacity(0.18) : Color.clear
     }
 }
