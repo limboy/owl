@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-08-28
+- Tidy up the fullscreen transition internally, with no change to how it looks or behaves
+
 ## [1.2.1] - 2026-08-28
 - Hide the pointer along with the player controls in fullscreen, after the same pause of stillness; moving the mouse brings both back
 
