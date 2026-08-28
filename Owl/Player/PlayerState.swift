@@ -7,13 +7,43 @@ struct SubtitleTrack: Identifiable, Equatable, Sendable {
     let codec: String?
     let isExternal: Bool
     let isSelected: Bool
+    /// The file an external track was loaded from, nil for an embedded one.
+    /// mpv's own track ids are only meaningful while a file is open, so this
+    /// is what a remembered sidecar choice is matched against on the next
+    /// viewing. Mirrors mpv's `external-filename`.
+    let externalURL: URL?
+
+    init(
+        id: Int64,
+        title: String,
+        language: String?,
+        codec: String?,
+        isExternal: Bool,
+        isSelected: Bool,
+        externalURL: URL? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.language = language
+        self.codec = codec
+        self.isExternal = isExternal
+        self.isSelected = isSelected
+        self.externalURL = externalURL
+    }
 
     var displayName: String {
         if !title.isEmpty {
             return title
         }
+        // A sidecar mpv found on its own carries no title, and its file name
+        // is the only thing that tells two of them apart — "Movie.en.srt"
+        // against "Movie.zh.srt", where both would otherwise read "SRT
+        // subtitle".
+        if let externalURL {
+            return externalURL.lastPathComponent
+        }
         if let language, !language.isEmpty {
-            return language.uppercased()
+            return SubtitleLanguage.displayName(for: language)
         }
         if let codec, !codec.isEmpty {
             return "\(codec.uppercased()) subtitle"
@@ -56,12 +86,15 @@ final class PlayerState: ObservableObject {
     /// Seconds subtitles are shifted relative to the video, positive meaning
     /// subtitles show later. Mirrors mpv's `sub-delay`.
     @Published var subtitleDelay: Double = 0
-    /// Bumped every time the subtitle delay menu changes `subtitleDelay`,
-    /// even when the new value equals the old one (e.g. Reset at 0). A view
-    /// wanting to flash a "delay changed" indicator on every such action —
-    /// not only when the number actually moves — observes this instead of
-    /// `subtitleDelay` itself.
-    @Published var subtitleDelayRevision = 0
+    /// What the last subtitle adjustment was, for the indicator that flashes
+    /// over the picture. Carries the value rather than a formatted string, so
+    /// the wording stays with the view that draws it.
+    @Published var subtitleNotice: SubtitleNotice = .delay(0)
+    /// Bumped every time an adjustment sets `subtitleNotice`, even when the
+    /// new notice equals the old one (e.g. Reset at a delay of 0). A view
+    /// wanting to flash the indicator on every such action — not only when
+    /// the value actually moves — observes this instead of the notice itself.
+    @Published var subtitleNoticeRevision = 0
     @Published var currentURL: URL?
     /// The picture's display aspect ratio — its width over its height, as it
     /// will be drawn — or nil while there is no video to take one from.
@@ -76,7 +109,19 @@ final class PlayerState: ObservableObject {
     }
 
     var selectedSubtitleID: Int64? {
-        subtitles.first(where: \.isSelected)?.id
+        selectedSubtitle?.id
+    }
+
+    var selectedSubtitle: SubtitleTrack? {
+        subtitles.first(where: \.isSelected)
+    }
+
+    /// Announces a subtitle adjustment to the indicator. Every path that
+    /// changes subtitles goes through here, so none of them can show the
+    /// picture changing with no word of why.
+    func announce(_ notice: SubtitleNotice) {
+        subtitleNotice = notice
+        subtitleNoticeRevision += 1
     }
 
     /// `startAt` is where the file is about to resume, if anywhere, so the

@@ -167,6 +167,53 @@ final class MPVPlayerEngineTests: XCTestCase {
         engine.shutdown()
     }
 
+    /// The track list is where a remembered sidecar is matched back up with
+    /// the file it came from, and the path it is matched on crosses from mpv
+    /// through the C shim. Nothing but a real player reports it.
+    func testAnExternalSubtitleIsReportedWithThePathItCameFrom() async throws {
+        let engine = try makeEngine()
+        let sample = try makeSample(audioOnly: true)
+        let subtitle = try makeSubtitle()
+        defer {
+            try? FileManager.default.removeItem(at: sample)
+            try? FileManager.default.removeItem(at: subtitle)
+        }
+
+        engine.load(sample)
+        try await waitUntil { engine.state.currentTime > 0 }
+        // Loading clears `slang` when no language has been learned, and the
+        // scale is set on every load. Either being rejected by mpv would raise
+        // a banner over the video rather than failing quietly.
+        XCTAssertNil(engine.state.errorMessage)
+
+        engine.setSubtitleScale(1.2)
+        engine.setSubtitleDelay(0.5)
+        engine.loadSubtitle(subtitle)
+        try await waitUntil { !engine.state.subtitles.isEmpty }
+
+        let track = try XCTUnwrap(engine.state.subtitles.first)
+        XCTAssertTrue(track.isExternal)
+        XCTAssertEqual(track.externalURL, subtitle.standardizedFileURL)
+        XCTAssertEqual(track.displayName, subtitle.lastPathComponent)
+        XCTAssertNil(engine.state.errorMessage)
+
+        engine.shutdown()
+        try await Task.sleep(for: .milliseconds(500))
+    }
+
+    private func makeSubtitle() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OwlEngineSample-\(UUID().uuidString).srt")
+        let contents = """
+        1
+        00:00:00,000 --> 00:00:05,000
+        Hello
+
+        """
+        try Data(contents.utf8).write(to: url)
+        return url
+    }
+
     /// Polls rather than sleeping a fixed span: opening a file and getting the
     /// first position back takes a second or so, and the position itself only
     /// lands four times a second.

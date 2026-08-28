@@ -15,6 +15,12 @@ final class PlayerKeyRoutingTests: XCTestCase {
         XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("f")))
         XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("F")))
         XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("g")))
+
+        // Shift is a modifier for every key but ⇧Z, which is a key of its own.
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent(" ", modifiers: .shift)))
+        XCTAssertNil(
+            PlayerKeyRouting.key(for: arrowEvent(NSRightArrowFunctionKey, modifiers: .shift))
+        )
         // ⌘← belongs to whatever text is being edited.
         XCTAssertNil(
             PlayerKeyRouting.key(for: arrowEvent(NSLeftArrowFunctionKey, modifiers: .command))
@@ -28,6 +34,35 @@ final class PlayerKeyRoutingTests: XCTestCase {
         )
     }
 
+    func testTheSubtitleKeysAreTheOnesMPVUses() {
+        XCTAssertEqual(PlayerKeyRouting.key(for: keyEvent("z")), .decreaseSubtitleDelay)
+        XCTAssertEqual(
+            PlayerKeyRouting.key(for: keyEvent("Z", modifiers: .shift)),
+            .increaseSubtitleDelay
+        )
+        XCTAssertEqual(PlayerKeyRouting.key(for: keyEvent("j")), .cycleSubtitle)
+
+        // Caps lock is not somebody holding shift down, so it must not swap
+        // the two delay keys over.
+        XCTAssertEqual(
+            PlayerKeyRouting.key(for: keyEvent("Z", modifiers: .capsLock)),
+            .decreaseSubtitleDelay
+        )
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("J", modifiers: .shift)))
+        // ⌘Z is Undo, wherever it is pressed.
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("z", modifiers: .command)))
+    }
+
+    /// Holding the delay keys down would run the subtitles minutes out of step
+    /// inside a second, at a quarter of a second for every repeat the keyboard
+    /// sends.
+    func testOnlySeekingAndVolumeRepeatWhileHeld() {
+        XCTAssertFalse(PlayerKey.increaseSubtitleDelay.repeats)
+        XCTAssertFalse(PlayerKey.decreaseSubtitleDelay.repeats)
+        XCTAssertFalse(PlayerKey.cycleSubtitle.repeats)
+        XCTAssertTrue(PlayerKey.seekForward.repeats)
+    }
+
     func testAFocusedListKeepsTheVerticalArrowsAndNothingElse() {
         let table = NSTableView()
 
@@ -39,6 +74,13 @@ final class PlayerKeyRoutingTests: XCTestCase {
         XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(.seekForward, firstResponder: table))
         XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(.seekBackward, firstResponder: table))
         XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(.togglePlayPause, firstResponder: table))
+        // The player covers the browser whenever these are being watched for,
+        // so they belong to what is on screen rather than to the list's own
+        // type-select.
+        XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(.cycleSubtitle, firstResponder: table))
+        XCTAssertTrue(
+            PlayerKeyRouting.belongsToPlayer(.increaseSubtitleDelay, firstResponder: table)
+        )
     }
 
     func testFocusInsideAListRowIsStillTheList() {
@@ -52,7 +94,7 @@ final class PlayerKeyRoutingTests: XCTestCase {
     func testTextBeingEditedKeepsEveryBareKeyIncludingTheSpaceBar() {
         let fieldEditor = NSTextView()
 
-        for key in [PlayerKey.togglePlayPause, .seekForward, .volumeUp] {
+        for key in [PlayerKey.togglePlayPause, .seekForward, .volumeUp, .cycleSubtitle] {
             XCTAssertFalse(PlayerKeyRouting.belongsToPlayer(key, firstResponder: fieldEditor))
         }
     }

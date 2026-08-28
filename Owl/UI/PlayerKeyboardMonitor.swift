@@ -8,15 +8,20 @@ enum PlayerKey: Equatable {
     case seekForward
     case volumeUp
     case volumeDown
+    case increaseSubtitleDelay
+    case decreaseSubtitleDelay
+    case cycleSubtitle
 
     /// Whether holding the key down should keep repeating the action. Seeking
     /// and volume are worth repeating; toggling anything on the same repeats
-    /// only flickers.
+    /// only flickers. Nor is the subtitle delay: a quarter of a second per
+    /// repeat at the rate a held key sends them would run the subtitles
+    /// minutes out inside a second.
     var repeats: Bool {
         switch self {
         case .seekBackward, .seekForward, .volumeUp, .volumeDown:
             true
-        case .togglePlayPause:
+        case .togglePlayPause, .increaseSubtitleDelay, .decreaseSubtitleDelay, .cycleSubtitle:
             false
         }
     }
@@ -27,8 +32,9 @@ enum PlayerKey: Equatable {
 enum PlayerKeyRouting {
     static func key(for event: NSEvent) -> PlayerKey? {
         // Caps lock, and the flags every arrow key carries, are not somebody
-        // holding a modifier down. Only these four are.
-        let actionModifiers: NSEvent.ModifierFlags = [.command, .control, .option, .shift]
+        // holding a modifier down. Only these three are — shift is asked about
+        // separately, because ⇧Z is a key of its own rather than a modified Z.
+        let actionModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
         guard event.modifierFlags.intersection(actionModifiers).isEmpty else {
             return nil
         }
@@ -38,18 +44,32 @@ enum PlayerKeyRouting {
         else {
             return nil
         }
+        let isShifted = event.modifierFlags.contains(.shift)
 
         switch Int(scalar.value) {
-        case 0x20:
+        case 0x20 where !isShifted:
             return .togglePlayPause
-        case NSLeftArrowFunctionKey:
+        case NSLeftArrowFunctionKey where !isShifted:
             return .seekBackward
-        case NSRightArrowFunctionKey:
+        case NSRightArrowFunctionKey where !isShifted:
             return .seekForward
-        case NSUpArrowFunctionKey:
+        case NSUpArrowFunctionKey where !isShifted:
             return .volumeUp
-        case NSDownArrowFunctionKey:
+        case NSDownArrowFunctionKey where !isShifted:
             return .volumeDown
+        default:
+            break
+        }
+
+        // The letters mpv itself uses for subtitles, so anybody arriving from
+        // mpv already knows them. Matched lowercased and against the shift key
+        // rather than against "z" and "Z", or caps lock — which is not somebody
+        // holding a modifier down — would swap the two.
+        switch Character(scalar).lowercased() {
+        case "z":
+            return isShifted ? .increaseSubtitleDelay : .decreaseSubtitleDelay
+        case "j" where !isShifted:
+            return .cycleSubtitle
         default:
             return nil
         }
@@ -74,9 +94,11 @@ enum PlayerKeyRouting {
             if current is NSText || current is NSTextField {
                 return false
             }
-            // A list moves its selection with the vertical arrows. Seeking and
-            // the space bar mean nothing to it, so those stay with the player
-            // even while the folder browser is being read through.
+            // A list moves its selection with the vertical arrows. Seeking,
+            // the space bar and the subtitle keys mean nothing to it, so those
+            // stay with the player even while the folder browser is being read
+            // through — and the player is what covers the browser whenever
+            // these keys are being watched for at all.
             if current is NSTableView || current is NSOutlineView || current is NSCollectionView {
                 return key != .volumeUp && key != .volumeDown
             }

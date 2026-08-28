@@ -772,6 +772,11 @@ int mvp_mpv_copy_subtitle_tracks(
                 copy_text(track->title, sizeof(track->title), node_string(map_value(item, "title")));
                 copy_text(track->language, sizeof(track->language), node_string(map_value(item, "lang")));
                 copy_text(track->codec, sizeof(track->codec), node_string(map_value(item, "codec")));
+                copy_text(
+                    track->external_filename,
+                    sizeof(track->external_filename),
+                    node_string(map_value(item, "external-filename"))
+                );
             }
             count++;
         }

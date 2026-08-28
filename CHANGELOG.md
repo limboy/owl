@@ -1,6 +1,17 @@
 # Changelog
 
 ## [Unreleased]
+- Remember which subtitle track was chosen for each file — an embedded track, a sidecar file, or off — and restore it when the file is reopened
+- Prefer the language of the last subtitle track chosen by hand on files never watched before, so the next episode opens on the right one; the preference is shown in the subtitle menu and can be turned off there
+- Drop a subtitle file on the picture to attach it, or a video to play it
+- Add keyboard shortcuts for subtitles: `Z` and `⇧Z` shift the delay, `J` steps through the tracks
+- Add Subtitle Size to the subtitle menu, applying to every window
+- Show a brief indicator over the picture for every subtitle change, not only the delay
+- Name sidecar subtitle tracks after their file, so two beside the same video can be told apart
+- Keep the player controls on screen while a menu over them is open, instead of hiding the button the open menu belongs to
+- Add a Subtitles menu to the menu bar holding the subtitle adjustments — timing, size, and the next track — with `⌥Z`, `⇧⌥Z` and `⌥J` shown beside them
+- Pare the player's subtitle button back to three things: Disabled, the file's tracks, and Load Subtitle…
+- Drop the "Show Subtitles Automatically" item: whether a file you have never opened shows a subtitle now follows the last answer given to the subtitle button, since Disabled and that setting were always the same question asked twice
 
 ## [1.1.0] - 2026-08-28
 - Resize the player window to match the video's aspect ratio, with smoother fullscreen transitions

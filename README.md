@@ -33,7 +33,11 @@ library and playback progress over, move
   and WebM.
 - A status bar under the list describing the selection: running time,
   dimensions, frame rate, and file size for a video, the location for a folder.
-- Embedded subtitle and audio track selection, plus external subtitle loading.
+- Subtitles that stay put: the track chosen for a file — embedded, sidecar, or
+  Disabled — is remembered and restored the next time it is opened, along with
+  the delay it needed. A file never watched before follows the same choice:
+  whether subtitles showed at all, and in which language.
+- Embedded and external audio track selection.
 - Queue controls with previous, next, shuffle, repeat all, and repeat one, and
   a queue that advances on its own when a file plays to its end.
 - Playback speed presets from 0.5x to 2x.
@@ -162,8 +166,20 @@ open "build/Build/Products/Release/Owl.app"
 - Click a video to select it and begin playback automatically.
 - Move the selection with the arrow keys to read a folder: the status bar under
   the list follows the selection, not the file being played.
-- Use the subtitle menu to select an embedded track, turn subtitles off, or
-  load an external subtitle.
+- Use the subtitle button in the player controls to choose what to read:
+  Disabled, whichever tracks the file has, and Load Subtitle… for one that is
+  not among them. Checking a track unchecks Disabled, and that answer is also
+  what a file you have never opened does: choose Disabled once and new files
+  start without subtitles, pick a track once and they start with one. A
+  subtitle file can also be dropped straight on the picture, which attaches it
+  without a panel.
+- The Subtitles menu in the menu bar holds the adjustments: the timing, the
+  size, and the track after this one.
+- With the picture up, `Z` and `⇧Z` shift the subtitles earlier and later, and
+  `J` steps through the tracks — mpv's own keys, and each flashes what it did
+  over the video. The menu bar shows `⌥Z`, `⇧⌥Z` and `⌥J` for the same three:
+  a key equivalent in the menu is matched before any window sees it, so a bare
+  letter there would be taken from every text field in the app.
 - Use the audio menu to switch between embedded audio tracks.
 - Use the Playback Options (`…`) menu in the browser toolbar to configure
   looping and shuffle, and to switch metadata sync on or off.
@@ -235,6 +251,9 @@ from a shell that exports it.
 | `Right Arrow` | Seek forward 5 seconds |
 | `Up Arrow` | Increase volume by 5% |
 | `Down Arrow` | Decrease volume by 5% |
+| `Z` or `⌥Z` | Show the subtitles 0.25s earlier |
+| `⇧Z` or `⇧⌥Z` | Show the subtitles 0.25s later |
+| `J` or `⌥J` | Step through the subtitle tracks, then off |
 | `F` | Toggle full screen |
 | `Control-Command-F` | Toggle full screen using the macOS convention |
 

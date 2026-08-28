@@ -344,13 +344,17 @@ final class MPVPlayerEngine: @unchecked Sendable {
             let title = swiftString(from: &mutableValue.title)
             let language = swiftString(from: &mutableValue.language)
             let codec = swiftString(from: &mutableValue.codec)
+            let externalFilename = swiftString(from: &mutableValue.external_filename)
             return SubtitleTrack(
                 id: value.id,
                 title: title,
                 language: language.isEmpty ? nil : language,
                 codec: codec.isEmpty ? nil : codec,
                 isExternal: value.external,
-                isSelected: value.selected
+                isSelected: value.selected,
+                externalURL: externalFilename.isEmpty
+                    ? nil
+                    : URL(fileURLWithPath: externalFilename).standardizedFileURL
             )
         }
 
@@ -378,13 +382,16 @@ final class MPVPlayerEngine: @unchecked Sendable {
     @MainActor
     /// Opens `url`, optionally beginning at `startAt` seconds rather than at
     /// the start, and letting mpv pick a subtitle track unless
-    /// `selectsSubtitles` says the user would rather watch without one.
+    /// `selectsSubtitles` says the last answer to that question was no.
     ///
-    /// `sid` is set to `auto` or `no` rather than a specific track: mpv already
+    /// `sid` is set to `auto` or `no` rather than to a specific track: mpv already
     /// knows which subtitle to prefer from the tracks' own default and forced
-    /// flags, from `subs-fallback=yes` when no flag settles it, and — with
+    /// flags, from `subs-fallback=yes` when no flag settles it, from
+    /// `preferredSubtitleLanguage` where one has been learned, and — with
     /// `sub-auto=fuzzy` — from the sidecar files sitting next to the video.
-    /// Picking a track here would throw all of that away.
+    /// Picking a track here would throw all of that away. A track remembered
+    /// for this particular file — including a remembered "off" — is applied
+    /// afterwards, once mpv has reported what the file actually contains.
     ///
     /// The position goes through mpv's `start` option instead of a seek issued
     /// once the file is open, so the first frame drawn is already the right one
@@ -400,11 +407,20 @@ final class MPVPlayerEngine: @unchecked Sendable {
     /// match it against a later `isMostRecentLoad(_:)` check itself rather
     /// than waiting on `onPlaybackEnded`.
     @discardableResult
-    func load(_ url: URL, startAt seconds: Double? = nil, selectsSubtitles: Bool = true) -> Int {
+    func load(
+        _ url: URL,
+        startAt seconds: Double? = nil,
+        selectsSubtitles: Bool = true,
+        preferredSubtitleLanguage: String? = nil
+    ) -> Int {
         let generation = bumpLoadGeneration()
         state.resetForLoad(url, startAt: seconds)
         discardPendingTimePosition()
         command(["set", "start", seconds.map { String($0) } ?? "none"])
+        // Set on every load rather than once, and cleared to the empty list
+        // when there is no preference, because mpv reads it as a file opens
+        // and would otherwise carry the last one into every file after it.
+        command(["set", "slang", preferredSubtitleLanguage ?? ""])
         command(["set", "sid", selectsSubtitles ? "auto" : "no"])
         command(["loadfile", url.path, "replace"])
         setPaused(false)
@@ -451,10 +467,23 @@ final class MPVPlayerEngine: @unchecked Sendable {
         setDouble(property: "sub-delay", value: seconds)
     }
 
+    /// Scales subtitles relative to however large mpv would draw them. Applies
+    /// to the player rather than to the file, so it survives every load and is
+    /// only set when it changes.
+    func setSubtitleScale(_ scale: Double) {
+        setDouble(property: "sub-scale", value: scale)
+    }
+
     func setAudio(id: Int64?) {
         command(["set", "aid", id.map(String.init) ?? "no"])
     }
 
+    /// Adds a subtitle file to the open video and shows it.
+    ///
+    /// Only for a file mpv has not already got: `sub-add` on a path that is
+    /// already in the track list adds a second copy of it. Selecting the
+    /// existing track is `setSubtitle(id:)`, and which of the two a request
+    /// needs is `SubtitleSelection.action(restoring:in:)`.
     func loadSubtitle(_ url: URL) {
         command(["sub-add", url.path, "select"])
     }

@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct PlayerContainerView: View {
     @ObservedObject var appModel: AppModel
@@ -25,8 +24,19 @@ struct PlayerContainerView: View {
     @State private var seekValue: Double = 0
     @State private var hideTask: Task<Void, Never>?
     @State private var errorDismissTask: Task<Void, Never>?
-    @State private var subtitleDelayIndicatorVisible = false
-    @State private var subtitleDelayDismissTask: Task<Void, Never>?
+    @State private var subtitleNoticeVisible = false
+    @State private var subtitleNoticeDismissTask: Task<Void, Never>?
+    @State private var isDropTargeted = false
+
+    /// How many menus are open over the picture.
+    ///
+    /// A menu is its own window, so opening one takes the pointer off this one
+    /// and the controls begin their two-and-a-half seconds to hiding — taking
+    /// the button the menu is attached to with them, out from under a menu
+    /// still being read. Counted rather than flagged because a submenu opens
+    /// while its parent is still open, and the parent's controls have to
+    /// survive the submenu closing.
+    @State private var openMenuCount = 0
 
     init(
         appModel: AppModel,
@@ -68,8 +78,8 @@ struct PlayerContainerView: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
 
-            if subtitleDelayIndicatorVisible {
-                subtitleDelayIndicator
+            if subtitleNoticeVisible {
+                subtitleNoticeIndicator
                     .transition(.opacity)
                     .allowsHitTesting(false)
             }
@@ -102,7 +112,7 @@ struct PlayerContainerView: View {
             .animation(.easeOut(duration: 0.18), value: controlsVisible)
             .animation(.easeOut(duration: 0.18), value: state.hasMedia)
             .animation(.easeOut(duration: 0.18), value: state.errorMessage)
-            .animation(.easeOut(duration: 0.18), value: subtitleDelayIndicatorVisible)
+            .animation(.easeOut(duration: 0.18), value: subtitleNoticeVisible)
         }
         .overlay(alignment: .topTrailing) {
             if let onClose, state.hasMedia {
@@ -133,10 +143,24 @@ struct PlayerContainerView: View {
         .onContinuousHover { phase in
             switch phase {
             case .active:
+                // The pointer is over the picture, which a tracking menu would
+                // have taken for itself: whatever the count says, no menu is
+                // open, and this is what puts it right if an end of tracking
+                // ever goes missing.
+                openMenuCount = 0
                 revealControls()
             case .ended:
                 scheduleControlsHide()
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
+            openMenuCount += 1
+            hideTask?.cancel()
+            controlsVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
+            openMenuCount = max(0, openMenuCount - 1)
+            scheduleControlsHide()
         }
         .onChange(of: state.isPaused) { _, isPaused in
             if isPaused {
@@ -149,13 +173,33 @@ struct PlayerContainerView: View {
         .onChange(of: state.errorMessage) { _, message in
             scheduleErrorDismiss(for: message)
         }
-        .onChange(of: state.subtitleDelayRevision) { _, _ in
-            showSubtitleDelayIndicator()
+        .onChange(of: state.subtitleNoticeRevision) { _, _ in
+            showSubtitleNotice()
         }
         .onDisappear {
             hideTask?.cancel()
             errorDismissTask?.cancel()
-            subtitleDelayDismissTask?.cancel()
+            subtitleNoticeDismissTask?.cancel()
+        }
+        // A subtitle file is dropped on the picture far more readily than it is
+        // found through an open panel, and the picture is the only part of the
+        // window still on screen once the player is up.
+        .dropDestination(for: URL.self) { urls, _ in
+            accept(urls)
+        } isTargeted: { targeted in
+            withAnimation(.easeOut(duration: 0.15)) {
+                isDropTargeted = targeted
+            }
+        }
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [9, 6]))
+                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                    .padding(10)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
         }
         .background {
             PlayerKeyboardMonitor(handle: handle)
@@ -175,7 +219,26 @@ struct PlayerContainerView: View {
             appModel.changeVolume(by: 5)
         case .volumeDown:
             appModel.changeVolume(by: -5)
+        case .increaseSubtitleDelay:
+            appModel.changeSubtitleDelay(by: SubtitlePreference.delayStep)
+        case .decreaseSubtitleDelay:
+            appModel.changeSubtitleDelay(by: -SubtitlePreference.delayStep)
+        case .cycleSubtitle:
+            appModel.cycleSubtitle()
         }
+    }
+
+    /// Takes a subtitle file for the video that is playing, or a video to play
+    /// instead of it. Anything else is refused rather than quietly swallowed.
+    private func accept(_ urls: [URL]) -> Bool {
+        if let subtitle = urls.first(where: SubtitleFile.isSubtitle) {
+            appModel.loadExternalSubtitle(subtitle)
+            return true
+        }
+        let videos = urls.filter(FolderLibrary.isVideo)
+        guard let video = videos.first else { return false }
+        appModel.play(video, from: videos, directory: video.deletingLastPathComponent())
+        return true
     }
 
     @ViewBuilder
@@ -222,8 +285,8 @@ struct PlayerContainerView: View {
         }
     }
 
-    private var subtitleDelayIndicator: some View {
-        Text("Subtitle Delay: \(subtitleDelayLabel(state.subtitleDelay))")
+    private var subtitleNoticeIndicator: some View {
+        Text(subtitleNoticeText)
             .font(.system(size: 20, weight: .semibold))
             .foregroundStyle(.white)
             .monospacedDigit()
@@ -241,19 +304,26 @@ struct PlayerContainerView: View {
             .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
     }
 
-    private func subtitleDelayLabel(_ seconds: Double) -> String {
-        let milliseconds = Int((seconds * 1000).rounded())
-        guard milliseconds != 0 else { return "0 ms" }
-        return milliseconds > 0 ? "+\(milliseconds) ms" : "\(milliseconds) ms"
+    private var subtitleNoticeText: String {
+        switch state.subtitleNotice {
+        case .delay(let seconds):
+            let milliseconds = Int((seconds * 1000).rounded())
+            let value = milliseconds > 0 ? "+\(milliseconds) ms" : "\(milliseconds) ms"
+            return "Subtitle Delay: \(value)"
+        case .scale(let scale):
+            return "Subtitle Size: \(Int((scale * 100).rounded()))%"
+        case .track(let name):
+            return "Subtitle: \(name)"
+        }
     }
 
-    private func showSubtitleDelayIndicator() {
-        subtitleDelayDismissTask?.cancel()
-        subtitleDelayIndicatorVisible = true
-        subtitleDelayDismissTask = Task { @MainActor in
+    private func showSubtitleNotice() {
+        subtitleNoticeDismissTask?.cancel()
+        subtitleNoticeVisible = true
+        subtitleNoticeDismissTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }
-            subtitleDelayIndicatorVisible = false
+            subtitleNoticeVisible = false
         }
     }
 
@@ -264,7 +334,7 @@ struct PlayerContainerView: View {
 
     private func scheduleControlsHide() {
         hideTask?.cancel()
-        guard !state.isPaused, !isSeeking else { return }
+        guard !state.isPaused, !isSeeking, openMenuCount == 0 else { return }
         hideTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2.5))
             guard !Task.isCancelled, !state.isPaused, !isSeeking else { return }
@@ -281,7 +351,6 @@ private struct PlayerControlsView: View {
     @Binding var isSeeking: Bool
     @Binding var seekValue: Double
     @State private var isVolumePopoverPresented = false
-    @AppStorage(SubtitlePreference.defaultsKey) private var subtitlesEnabledByDefault = true
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -512,41 +581,43 @@ private struct PlayerControlsView: View {
         return "\(text)x"
     }
 
-    private static let subtitleDelayStep: Double = 0.25
-
+    /// What the subtitle button offers: whether subtitles are showing, which
+    /// track, and a way to bring in a file that is not in the folder.
+    ///
+    /// Nothing else. Everything that is a setting rather than a choice about
+    /// the file being watched — the timing, the size, the track after this one
+    /// — is in the Subtitles menu in the menu bar. This one opens over the
+    /// picture, mid-film, and what is wanted then is which subtitle to read.
     private var subtitleMenu: some View {
         Menu {
-            trackToggle("Off", selected: state.selectedSubtitleID == nil) {
-                engine.setSubtitle(id: nil)
+            // Radio behaviour with the tracks below it: checking this clears
+            // whichever track was checked, because mpv only ever has one
+            // subtitle selected and the checkmarks read straight from that.
+            trackToggle("Disabled", selected: state.selectedSubtitleID == nil) {
+                appModel.selectSubtitle(nil)
             }
 
-            if !state.subtitles.isEmpty {
-                Divider()
+            Divider()
+
+            if state.subtitles.isEmpty {
+                Text("No subtitles in this file")
+            } else {
                 ForEach(state.subtitles) { track in
                     trackToggle(
                         track.displayName + (track.isExternal ? " — External" : ""),
                         selected: track.isSelected
                     ) {
-                        engine.setSubtitle(id: track.id)
+                        appModel.selectSubtitle(track)
                     }
                 }
             }
 
             Divider()
-            Button("Load Subtitle…") {
-                chooseSubtitle()
-            }
-            Toggle("Show Subtitles Automatically", isOn: $subtitlesEnabledByDefault)
 
-            Divider()
-            Button("Increase Subtitle Delay") {
-                appModel.changeSubtitleDelay(by: Self.subtitleDelayStep)
-            }
-            Button("Decrease Subtitle Delay") {
-                appModel.changeSubtitleDelay(by: -Self.subtitleDelayStep)
-            }
-            Button("Reset Subtitle Delay") {
-                appModel.resetSubtitleDelay()
+            Button("Load Subtitle…") {
+                SubtitleFile.choose { url in
+                    appModel.loadExternalSubtitle(url)
+                }
             }
         } label: {
             Image(systemName: "captions.bubble")
@@ -593,21 +664,6 @@ private struct PlayerControlsView: View {
             get: { selected },
             set: { if $0 { select() } }
         ))
-    }
-
-    private func chooseSubtitle() {
-        let panel = NSOpenPanel()
-        panel.title = "Choose Subtitle"
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowedContentTypes = ["srt", "ass", "ssa", "vtt", "sub", "idx"]
-            .compactMap { UTType(filenameExtension: $0) }
-
-        panel.presentAsSheet { urls in
-            guard let url = urls.first else { return }
-            engine.loadSubtitle(url)
-        }
     }
 
     private func controlButton(

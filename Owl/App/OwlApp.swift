@@ -56,6 +56,7 @@ struct OwlApp: App {
         .commands {
             FileCommands()
             PlaybackCommands()
+            SubtitleCommands()
             #if canImport(Sparkle)
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: updaterController.updater)
@@ -162,6 +163,78 @@ struct PlaybackCommands: Commands {
 
             Button("Reset Speed") {
                 target?.appModel.setSpeed(1)
+            }
+        }
+    }
+
+    private var target: PlayerTarget? {
+        activePlayer.target
+    }
+}
+
+/// The Subtitles menu: everything subtitles can be set to, in one place.
+///
+/// It acts on the frontmost window's player through `ActivePlayer`, and is
+/// built and disabled on the same terms as `PlaybackCommands` — see the
+/// reasoning there.
+///
+/// The keys here carry Option, where the player's own bare `Z` and `J` do not.
+/// A key equivalent in the main menu is matched before the window sees the
+/// event — see `PlayerKeyboardMonitor` — so a bare letter here would be taken
+/// from every text field in the app, the search field of the very panel this
+/// menu opens included. The bare keys keep working over the picture, where
+/// nothing is being typed into.
+///
+/// Which track is showing is not here. That is a choice about the file being
+/// watched rather than a setting, it changes as often as the file does, and it
+/// belongs beside the picture: the subtitle button in the player controls keeps
+/// it, along with the delay, which is the one adjustment made while watching.
+struct SubtitleCommands: Commands {
+    @ObservedObject private var activePlayer = ActivePlayer.shared
+    @AppStorage(SubtitlePreference.scaleKey) private var subtitleScale = 1.0
+
+    var body: some Commands {
+        CommandMenu("Subtitles") {
+            Button("Load Subtitle…") {
+                guard let target else { return }
+                SubtitleFile.choose { url in
+                    target.appModel.loadExternalSubtitle(url)
+                }
+            }
+            Button("Next Subtitle Track") {
+                target?.appModel.cycleSubtitle()
+            }
+            .keyboardShortcut("j", modifiers: .option)
+
+            Divider()
+
+            Button("Increase Subtitle Delay") {
+                target?.appModel.changeSubtitleDelay(by: SubtitlePreference.delayStep)
+            }
+            .keyboardShortcut("z", modifiers: [.shift, .option])
+            Button("Decrease Subtitle Delay") {
+                target?.appModel.changeSubtitleDelay(by: -SubtitlePreference.delayStep)
+            }
+            .keyboardShortcut("z", modifiers: .option)
+            Button("Reset Subtitle Delay") {
+                target?.appModel.resetSubtitleDelay()
+            }
+
+            Divider()
+
+            // A label rather than an item, the way the audio menu says it has
+            // nothing to offer. Nothing here is `disabled` at its limits: a
+            // disabled state in the main menu holds the value the menu was
+            // built with, and the size clamps itself anyway.
+            Text("Subtitle Size — \(Int((subtitleScale * 100).rounded()))%")
+            Button("Larger Subtitles") {
+                target?.appModel.changeSubtitleScale(by: SubtitlePreference.scaleStep)
+            }
+            Button("Smaller Subtitles") {
+                target?.appModel.changeSubtitleScale(by: -SubtitlePreference.scaleStep)
+            }
+            Button("Reset Subtitle Size") {
+                target?.appModel.resetSubtitleScale()
             }
         }
     }

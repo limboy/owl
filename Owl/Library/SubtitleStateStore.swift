@@ -1,28 +1,39 @@
 import Foundation
 
-struct SubtitleDelayEntry: Codable, Equatable, Sendable {
+struct SubtitleStateEntry: Codable, Equatable, Sendable {
     let url: URL
     var delaySeconds: Double
+    /// The track chosen by hand for this file, or nil if the choice was never
+    /// taken away from mpv.
+    var selection: SubtitleSelection?
     var lastUpdated: Date
+
+    /// Whether the entry says anything worth keeping. A file watched with
+    /// whatever mpv picked, unshifted, is the ordinary case and needs no row
+    /// of its own.
+    var isDefault: Bool {
+        delaySeconds == 0 && selection == nil
+    }
 }
 
-/// Remembers the subtitle delay chosen for each file, so reopening one that
-/// needed shifting does not need re-shifting.
+/// Remembers how subtitles were set up for each file — which track, and how far
+/// it was shifted — so reopening one that needed fixing does not need fixing
+/// again.
 ///
 /// Mirrors `PlaybackProgressStore` in shape — one JSON file in Application
 /// Support, keyed by standardized URL, capped and trimmed the same way — but
-/// kept separate rather than folded into `PlaybackProgress`: a delay can be
-/// set (or reset) before that file's position has ever been recorded, and
+/// kept separate rather than folded into `PlaybackProgress`: a choice can be
+/// made (or reset) before that file's position has ever been recorded, and
 /// this store should not have to fake a position and duration to hold it.
 @MainActor
-final class SubtitleDelayStore: ObservableObject {
+final class SubtitleStateStore: ObservableObject {
     /// The app's store. Every window shares this one, the same reasoning as
     /// `PlaybackProgressStore.shared`.
-    static let shared = SubtitleDelayStore()
+    static let shared = SubtitleStateStore()
 
-    @Published private(set) var entries: [SubtitleDelayEntry] = []
+    @Published private(set) var entries: [SubtitleStateEntry] = []
 
-    private var entriesByURL: [URL: SubtitleDelayEntry] = [:]
+    private var entriesByURL: [URL: SubtitleStateEntry] = [:]
 
     /// See `PlaybackProgressStore.maximumEntryCount` — same ceiling, same
     /// reasoning: entries only ever accumulate, and losing the oldest costs
@@ -41,6 +52,9 @@ final class SubtitleDelayStore: ObservableObject {
             ).first!
             self.storageURL = applicationSupport
                 .appendingPathComponent("Owl", isDirectory: true)
+                // Named for the delay because that is all it once held. The
+                // file is somebody's existing adjustments, and a new name
+                // would silently throw them away for a tidier one.
                 .appendingPathComponent("subtitle-delay.json")
         }
         restore()
@@ -50,30 +64,16 @@ final class SubtitleDelayStore: ObservableObject {
         entriesByURL[url.standardizedFileURL]?.delaySeconds
     }
 
-    /// A delay of exactly zero is indistinguishable from "never set", and
-    /// costs nothing to leave unset, so it is dropped rather than stored —
-    /// keeping the file from growing by one entry for every video anyone
-    /// merely opens and closes with Reset never touched.
-    func record(url: URL, delaySeconds: Double) {
-        guard delaySeconds != 0 else {
-            remove(url: url)
-            return
-        }
-        let normalizedURL = url.standardizedFileURL
-        let value = SubtitleDelayEntry(
-            url: normalizedURL,
-            delaySeconds: delaySeconds,
-            lastUpdated: Date()
-        )
-        if let index = entries.firstIndex(where: { $0.url.standardizedFileURL == normalizedURL }) {
-            entries[index] = value
-        } else {
-            entries.append(value)
-        }
-        entries.sort { $0.lastUpdated > $1.lastUpdated }
-        entriesByURL[normalizedURL] = value
-        trimToLimit()
-        persist()
+    func selection(for url: URL) -> SubtitleSelection? {
+        entriesByURL[url.standardizedFileURL]?.selection
+    }
+
+    func recordDelay(url: URL, delaySeconds: Double) {
+        update(url: url) { $0.delaySeconds = delaySeconds }
+    }
+
+    func recordSelection(url: URL, selection: SubtitleSelection?) {
+        update(url: url) { $0.selection = selection }
     }
 
     func remove(url: URL) {
@@ -84,9 +84,39 @@ final class SubtitleDelayStore: ObservableObject {
         persist()
     }
 
+    /// Applies `change` to this file's entry, making one if there is none, and
+    /// dropping it again if what is left is what a file gets anyway — keeping
+    /// the file from growing by a row for every video merely opened and closed
+    /// with Reset never touched.
+    private func update(url: URL, change: (inout SubtitleStateEntry) -> Void) {
+        let normalizedURL = url.standardizedFileURL
+        var entry = entriesByURL[normalizedURL] ?? SubtitleStateEntry(
+            url: normalizedURL,
+            delaySeconds: 0,
+            selection: nil,
+            lastUpdated: Date()
+        )
+        change(&entry)
+        guard !entry.isDefault else {
+            remove(url: normalizedURL)
+            return
+        }
+        entry.lastUpdated = Date()
+
+        if let index = entries.firstIndex(where: { $0.url.standardizedFileURL == normalizedURL }) {
+            entries[index] = entry
+        } else {
+            entries.append(entry)
+        }
+        entries.sort { $0.lastUpdated > $1.lastUpdated }
+        entriesByURL[normalizedURL] = entry
+        trimToLimit()
+        persist()
+    }
+
     private func restore() {
         guard let data = try? Data(contentsOf: storageURL),
-              let values = try? JSONDecoder().decode([SubtitleDelayEntry].self, from: data)
+              let values = try? JSONDecoder().decode([SubtitleStateEntry].self, from: data)
         else {
             return
         }

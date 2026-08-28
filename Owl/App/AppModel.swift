@@ -12,7 +12,7 @@ final class AppModel: ObservableObject {
 
     let playbackQueue: PlaybackQueue
     let progressStore: PlaybackProgressStore
-    let subtitleDelayStore: SubtitleDelayStore
+    let subtitleStore: SubtitleStateStore
 
     @Published private(set) var engine: MPVPlayerEngine?
     @Published private(set) var videoView: OwlVideoView?
@@ -33,6 +33,16 @@ final class AppModel: ObservableObject {
     /// the first draw.
     private var pendingLoad: (url: URL, startAt: Double?)?
 
+    /// The choice remembered for the file being opened, waiting for mpv to say
+    /// what tracks it actually has.
+    ///
+    /// A track cannot be selected until the track list exists, and the list
+    /// arrives after the file is loaded — sometimes in the same breath,
+    /// sometimes a moment later when a sidecar finishes being read. Held here
+    /// until one of those two moments can act on it, and dropped the instant
+    /// another file is asked for, so a choice never lands on the wrong video.
+    private var pendingSubtitleSelection: SubtitleSelection?
+
     /// Held while a video is playing, to keep the display awake. Nil whenever
     /// nothing is playing, which is also how the state is read.
     private var playbackActivity: NSObjectProtocol?
@@ -41,12 +51,12 @@ final class AppModel: ObservableObject {
         folderLibrary: FolderLibrary?,
         playbackQueue: PlaybackQueue = PlaybackQueue(),
         progressStore: PlaybackProgressStore = .shared,
-        subtitleDelayStore: SubtitleDelayStore = .shared
+        subtitleStore: SubtitleStateStore = .shared
     ) {
         self.folderLibrary = folderLibrary
         self.playbackQueue = playbackQueue
         self.progressStore = progressStore
-        self.subtitleDelayStore = subtitleDelayStore
+        self.subtitleStore = subtitleStore
 
         folderLibrary?.onVisibleVideosChanged = { [weak self] directory, videos in
             guard let self else { return }
@@ -70,8 +80,9 @@ final class AppModel: ObservableObject {
                 self?.advanceAfterEnd(generation: generation)
             }
             engine.onFileLoaded = { [weak self] in
-                self?.applyStoredSubtitleDelay()
+                self?.applyStoredSubtitleState()
             }
+            engine.setSubtitleScale(SubtitlePreference.scale)
             self.engine = engine
             let videoView = OwlVideoView(engine: engine)
             videoView.onRendererReady = { [weak self] in
@@ -170,37 +181,147 @@ final class AppModel: ObservableObject {
         engine?.setSpeed(playerState.speed + amount)
     }
 
-    /// Applies immediately to `playerState` rather than waiting on mpv's own
-    /// report of the property, so an indicator watching `subtitleDelay` has
-    /// the right number the instant the menu action fires; the eventual mpv
-    /// event just confirms the same value.
     func changeSubtitleDelay(by seconds: Double) {
-        playerState.subtitleDelay += seconds
-        playerState.subtitleDelayRevision += 1
-        engine?.setSubtitleDelay(playerState.subtitleDelay)
-        rememberSubtitleDelay()
+        setSubtitleDelay(playerState.subtitleDelay + seconds)
     }
 
     func resetSubtitleDelay() {
-        playerState.subtitleDelay = 0
-        playerState.subtitleDelayRevision += 1
-        engine?.setSubtitleDelay(0)
-        rememberSubtitleDelay()
+        setSubtitleDelay(0)
     }
 
-    private func rememberSubtitleDelay() {
+    /// Applies immediately to `playerState` rather than waiting on mpv's own
+    /// report of the property, so the indicator has the right number the
+    /// instant the key or the menu item fires; the eventual mpv event just
+    /// confirms the same value.
+    private func setSubtitleDelay(_ seconds: Double) {
+        playerState.subtitleDelay = seconds
+        playerState.announce(.delay(seconds))
+        engine?.setSubtitleDelay(seconds)
         guard let url = playerState.currentURL else { return }
-        subtitleDelayStore.record(url: url, delaySeconds: playerState.subtitleDelay)
+        subtitleStore.recordDelay(url: url, delaySeconds: seconds)
     }
 
-    /// Restores whatever delay was last set for the file mpv just reported
-    /// as loaded, or the default of none if nothing was ever recorded for
-    /// it. Runs on every load — including a file mpv is replaying — so a
-    /// delay left over from the previous file in this same player can never
-    /// bleed into one that never needed shifting.
-    private func applyStoredSubtitleDelay() {
+    func changeSubtitleScale(by amount: Double) {
+        setSubtitleScale(SubtitlePreference.scale + amount)
+    }
+
+    func resetSubtitleScale() {
+        setSubtitleScale(1)
+    }
+
+    /// Unlike the delay, this is not remembered per file: it is applied to
+    /// this player now, and to every file any window opens after it.
+    private func setSubtitleScale(_ scale: Double) {
+        SubtitlePreference.scale = scale
+        let applied = SubtitlePreference.scale
+        playerState.announce(.scale(applied))
+        engine?.setSubtitleScale(applied)
+    }
+
+    /// Shows `track`, or turns subtitles off when given nothing, and remembers
+    /// the choice for this file.
+    ///
+    /// `SubtitlePreference` hears about it as well. Choosing by hand is the
+    /// clearest statement anyone makes about what they want — whether subtitles
+    /// at all, and in which language — and it is the only thing that can help
+    /// the next episode, which has no memory of its own to restore.
+    func selectSubtitle(_ track: SubtitleTrack?) {
+        // A choice made by hand outranks whatever was still waiting to be
+        // restored, which would otherwise undo it a moment later.
+        pendingSubtitleSelection = nil
+        engine?.setSubtitle(id: track?.id)
+
+        let selection = track.map(SubtitleSelection.of) ?? .off
+        if let url = playerState.currentURL {
+            subtitleStore.recordSelection(url: url, selection: selection)
+        }
+        SubtitlePreference.isEnabled = track != nil
+        if let language = selection.language {
+            SubtitlePreference.preferredLanguage = language
+        }
+        playerState.announce(.track(track?.displayName ?? "Off"))
+    }
+
+    /// Steps through the file's subtitle tracks and then off, for the key that
+    /// does this without opening a menu.
+    func cycleSubtitle() {
+        guard playerState.hasMedia else { return }
+        guard !playerState.subtitles.isEmpty else {
+            // Silence would read as a key that does nothing.
+            playerState.announce(.track("None available"))
+            return
+        }
+        selectSubtitle(
+            SubtitleSelection.next(
+                after: playerState.selectedSubtitle,
+                in: playerState.subtitles
+            )
+        )
+    }
+
+    /// Attaches a subtitle file to the video that is playing — from the open
+    /// panel, or from one dropped on the picture.
+    func loadExternalSubtitle(_ url: URL) {
+        guard playerState.hasMedia else { return }
+
+        // Dropping a file mpv already has — a sidecar it found by itself, or
+        // the same file twice — selects that track instead of adding a second
+        // copy of it to the menu.
+        if let loaded = playerState.subtitles.first(where: {
+            $0.externalURL == url.standardizedFileURL
+        }) {
+            selectSubtitle(loaded)
+            return
+        }
+
+        pendingSubtitleSelection = nil
+        engine?.loadSubtitle(url)
+        SubtitlePreference.isEnabled = true
+        if let current = playerState.currentURL {
+            subtitleStore.recordSelection(url: current, selection: .external(url: url))
+        }
+        playerState.announce(.track(url.lastPathComponent))
+    }
+
+    /// Restores how this file was last watched: the delay it needed, and the
+    /// track that was chosen for it. Runs on every load — including a file mpv
+    /// is replaying — so nothing left over from the previous file in this same
+    /// player can bleed into one that never needed it.
+    private func applyStoredSubtitleState() {
         guard let url = playerState.currentURL else { return }
-        engine?.setSubtitleDelay(subtitleDelayStore.delay(for: url) ?? 0)
+        engine?.setSubtitleDelay(subtitleStore.delay(for: url) ?? 0)
+        pendingSubtitleSelection = subtitleStore.selection(for: url)
+        // mpv reports the track list as part of loading the file, so it may
+        // already be here; if it is not, `observePlayerState` is watching for
+        // it. Whichever arrives second does the work.
+        restoreSubtitleSelection(in: playerState.subtitles)
+    }
+
+    private func restoreSubtitleSelection(in tracks: [SubtitleTrack]) {
+        guard let selection = pendingSubtitleSelection, !tracks.isEmpty else { return }
+
+        switch SubtitleSelection.action(restoring: selection, in: tracks) {
+        case .none:
+            // Either it is already showing, or the track is not in this file
+            // any more. Neither is worth undoing mpv's own pick over.
+            break
+        case .turnOff:
+            engine?.setSubtitle(id: nil)
+        case .select(let id):
+            engine?.setSubtitle(id: id)
+        case .loadExternal(let url):
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                // The sidecar has been moved or deleted since. Asking mpv for
+                // it would only raise an error banner over the video, so the
+                // choice is forgotten instead.
+                if let current = playerState.currentURL {
+                    subtitleStore.recordSelection(url: current, selection: nil)
+                }
+                break
+            }
+            engine?.loadSubtitle(url)
+        }
+        pendingSubtitleSelection = nil
     }
 
     func closeVideo() {
@@ -209,6 +330,7 @@ final class AppModel: ObservableObject {
         }
         queueDirectory = nil
         pendingLoad = nil
+        pendingSubtitleSelection = nil
         folderLibrary?.selectedVideo = nil
         playbackQueue.clear()
         engine?.stop()
@@ -268,7 +390,7 @@ final class AppModel: ObservableObject {
         }
 
         pendingLoad = nil
-        engine?.load(url, startAt: startAt, selectsSubtitles: SubtitlePreference.isEnabled)
+        startPlayback(url, startAt: startAt)
         updateNowPlaying()
     }
 
@@ -276,12 +398,24 @@ final class AppModel: ObservableObject {
     private func loadPendingVideo() {
         guard let pendingLoad else { return }
         self.pendingLoad = nil
-        engine?.load(
-            pendingLoad.url,
-            startAt: pendingLoad.startAt,
-            selectsSubtitles: SubtitlePreference.isEnabled
-        )
+        startPlayback(pendingLoad.url, startAt: pendingLoad.startAt)
         updateNowPlaying()
+    }
+
+    /// Hands mpv a file along with what the last subtitle choice implies about
+    /// this one: whether to show a subtitle at all, which language to lean
+    /// towards when mpv has a choice to make, and how large to draw them. A
+    /// file watched before overrules the first two once its own tracks arrive.
+    private func startPlayback(_ url: URL, startAt: Double?) {
+        // Nothing remembered for the file being replaced may reach this one.
+        pendingSubtitleSelection = nil
+        engine?.setSubtitleScale(SubtitlePreference.scale)
+        engine?.load(
+            url,
+            startAt: startAt,
+            selectsSubtitles: SubtitlePreference.isEnabled,
+            preferredSubtitleLanguage: SubtitlePreference.preferredLanguage
+        )
     }
 
     /// Where a video should pick up, or nil to start it from the beginning.
@@ -317,6 +451,14 @@ final class AppModel: ObservableObject {
             .sink { [weak self] _, _, _ in
                 self?.saveCurrentProgress()
                 self?.updateNowPlaying()
+            }
+            .store(in: &cancellables)
+
+        // A remembered track can only be applied once mpv says what the file
+        // holds, which is its own event, after the file is loaded.
+        playerState.$subtitles
+            .sink { [weak self] tracks in
+                self?.restoreSubtitleSelection(in: tracks)
             }
             .store(in: &cancellables)
 

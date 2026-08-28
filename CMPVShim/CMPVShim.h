@@ -46,6 +46,10 @@ typedef struct MVPMPVSubtitleTrack {
     char title[256];
     char language[64];
     char codec[64];
+    // Where an external track was loaded from, empty for an embedded one.
+    // PATH_MAX so a path is never half-copied: the app matches tracks against
+    // it, and a truncated path matches nothing.
+    char external_filename[1024];
 } MVPMPVSubtitleTrack;
 
 typedef struct MVPMPVAudioTrack {
