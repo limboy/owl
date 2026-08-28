@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-08-28
+- Fix the watched checkbox in List view, which opened the video instead of marking it watched when clicked
+
 ## [1.2.2] - 2026-08-28
 - Tidy up the fullscreen transition internally, with no change to how it looks or behaves
 
