@@ -44,6 +44,8 @@ struct OwlApp: App {
                         .frame(width: 0, height: 0)
                     WindowTitleHidden()
                         .frame(width: 0, height: 0)
+                    FullScreenTransition()
+                        .frame(width: 0, height: 0)
                 }
         }
         .defaultSize(width: 1_080, height: 760)

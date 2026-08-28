@@ -92,10 +92,9 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     /// picture's, and nil until then.
     private var videoAspectRatio: CGFloat?
 
-    /// Where the window was before fullscreen took it, for the animation out of
-    /// fullscreen to bring it back to.
-    private var frameBeforeFullScreen: NSRect?
-    private var screenBeforeFullScreen: NSScreen?
+    /// The window's own animation in and out of fullscreen — see the type for
+    /// why the transition is not left to AppKit.
+    private let fullScreenAnimator = FullScreenFrameAnimator()
 
     init(url: URL, onClose: @escaping () -> Void) {
         appModel = AppModel(folderLibrary: nil)
@@ -298,15 +297,6 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     }
 
     // MARK: - Fullscreen
-    //
-    // The transition is animated here rather than left to AppKit. AppKit's own
-    // is a snapshot of the window stretched to the shape of the screen and
-    // crossfaded into the resized window, which for a window shaped like its
-    // video means the picture is the wrong shape for as long as the animation
-    // lasts and only springs back to the right one at the end of it. Animating
-    // the window's frame instead resizes the video view every step of the way,
-    // so mpv draws the picture at the shape it really is throughout, and the
-    // black bars fullscreen puts around it grow rather than appear.
 
     func windowWillEnterFullScreen(_ notification: Notification) {
         // A window is asked to be the size of the screen on the way in, which
@@ -320,23 +310,16 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         // what keeps the two animations from each landing a title bar's height
         // away from where the window really goes.
         window.styleMask.insert(.fullSizeContentView)
-        screenBeforeFullScreen = window.screen
-        // Read after the style change, so it is the frame AppKit will hand back
-        // on the way out and the exit animation can land exactly on it.
-        frameBeforeFullScreen = window.frame
-    }
-
-    func windowDidEnterFullScreen(_ notification: Notification) {
-        NSLog("OWLDBG did-enter windowFrame=\(window.frame) content=\(window.contentLayoutRect) style=\(window.styleMask.rawValue)")
+        // Noted after the style change, so it is the frame AppKit will hand
+        // back on the way out and the exit animation can land exactly on it.
+        fullScreenAnimator.rememberWindowedFrame(of: window)
     }
 
     func windowDidExitFullScreen(_ notification: Notification) {
-        NSLog("OWLDBG did-exit before=\(window.frame) saved=\(String(describing: frameBeforeFullScreen))")
         // Puts the title bar back above the picture, which grows the frame by
         // its height and leaves the content — the video — where it was.
         window.styleMask.remove(.fullSizeContentView)
         applyVideoAspectRatio(videoAspectRatio)
-        NSLog("OWLDBG did-exit after=\(window.frame)")
     }
 
     func customWindowsToEnterFullScreen(for window: NSWindow) -> [NSWindow]? {
@@ -347,11 +330,7 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         _ window: NSWindow,
         startCustomAnimationToEnterFullScreenWithDuration duration: TimeInterval
     ) {
-        guard let screen = screenBeforeFullScreen ?? window.screen ?? NSScreen.main else {
-            return
-        }
-        NSLog("OWLDBG enter-anim from=\(window.frame) target=\(fullScreenFrame(on: screen))")
-        animate(window, to: fullScreenFrame(on: screen), over: duration)
+        fullScreenAnimator.animateIntoFullScreen(window, over: duration)
     }
 
     func customWindowsToExitFullScreen(for window: NSWindow) -> [NSWindow]? {
@@ -362,45 +341,16 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         _ window: NSWindow,
         startCustomAnimationToExitFullScreenWithDuration duration: TimeInterval
     ) {
-        guard let frame = frameBeforeFullScreen else { return }
-        animate(window, to: frame, over: duration)
+        fullScreenAnimator.animateOutOfFullScreen(window, over: duration)
     }
 
-    /// Taking the animation on means answering for the window ending up where
-    /// it was going, including when the transition is abandoned partway.
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
-        if let frame = frameBeforeFullScreen {
-            window.setFrame(frame, display: true)
-        }
+        fullScreenAnimator.settleWindowed(window)
         window.styleMask.remove(.fullSizeContentView)
         applyVideoAspectRatio(videoAspectRatio)
     }
 
     func windowDidFailToExitFullScreen(_ window: NSWindow) {
-        guard let screen = screenBeforeFullScreen ?? window.screen ?? NSScreen.main else {
-            return
-        }
-        window.setFrame(fullScreenFrame(on: screen), display: true)
-    }
-
-    /// Where a fullscreen window on `screen` ends up.
-    ///
-    /// Not the whole screen: AppKit keeps a strip along the top for the title
-    /// bar it hides there, and on a display with a notch the room the notch
-    /// takes on top of that. Animating to the whole screen instead would leave
-    /// the window to be dropped down by that much the moment the animation
-    /// ended, which is the jolt the animation is here to avoid.
-    private func fullScreenFrame(on screen: NSScreen) -> NSRect {
-        var frame = screen.frame
-        frame.size.height -= screen.safeAreaInsets.top
-        return frame
-    }
-
-    private func animate(_ window: NSWindow, to frame: NSRect, over duration: TimeInterval) {
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = duration
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            window.animator().setFrame(frame, display: true)
-        }
+        fullScreenAnimator.settleFullScreen(window)
     }
 }
