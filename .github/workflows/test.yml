@@ -13,7 +13,7 @@ concurrency:
 jobs:
   build-app-macos:
     name: Build Owl (Debug)
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
@@ -21,9 +21,9 @@ jobs:
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          # Pinned: Xcode 26.3 + macos-15 runner crashes ibtoold during
-          # owl.icon (Icon Composer) compile with dyld AVFCore symbol
-          # mismatches. 26.2 builds the .icon asset cleanly.
+          # Pinned: Xcode 26.3 crashes ibtoold during the owl.icon (Icon
+          # Composer) compile with dyld AVFCore symbol mismatches. 26.2
+          # builds the .icon asset cleanly.
           xcode-version: "26.2"
 
       - name: Install xcodegen
