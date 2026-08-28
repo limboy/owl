@@ -671,13 +671,13 @@ private struct LibraryGridButton: View {
         }
         .buttonStyle(LibraryItemButtonStyle())
         .disabled(!isEnabled)
-        .overlay(alignment: .topTrailing) {
+        .overlay(alignment: .topLeading) {
             if isCoverHovered, let onToggleWatched {
                 WatchedToggleButton(
                     isWatched: progress?.isCompleted == true,
                     action: onToggleWatched
                 )
-                .padding(8)
+                .offset(MediaCover.badgeOffset(in: coverFrame))
             }
         }
         .coordinateSpace(.named(Self.hoverSpace))
@@ -795,15 +795,13 @@ private struct LibraryListButton: View {
         }
         .buttonStyle(LibraryItemButtonStyle())
         .disabled(!isEnabled)
-        .overlay(alignment: .leading) {
+        .overlay(alignment: .topLeading) {
             if isCoverHovered, let onToggleWatched {
                 WatchedToggleButton(
                     isWatched: progress?.isCompleted == true,
                     action: onToggleWatched
                 )
-                .padding(8)
-                .frame(width: 112, height: 64, alignment: .topTrailing)
-                .padding(.leading, 10)
+                .offset(MediaCover.badgeOffset(in: coverFrame))
             }
         }
         .coordinateSpace(.named(Self.hoverSpace))
@@ -825,7 +823,7 @@ private struct WatchedToggleButton: View {
     var body: some View {
         Button(action: action) {
             Color.clear
-                .frame(width: 24, height: 24)
+                .frame(width: MediaCover.badgeSize, height: MediaCover.badgeSize)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -858,6 +856,22 @@ private struct MediaCover: View {
     let isFolder: Bool
     let progress: PlaybackProgress?
     var showsWatchedAffordance = false
+
+    /// The watched badge's size, and its inset from the artwork's top-trailing
+    /// corner. Public because the click target is a separate view stacked over
+    /// the cover: it is placed from these, so the two cannot drift apart the
+    /// way they did when the row spelled out its own numbers.
+    static let badgeSize: CGFloat = 24
+    static let badgeInset: CGFloat = 8
+
+    /// Where a badge-sized click target has to sit, in whatever space
+    /// `coverFrame` was measured in, to land on the badge.
+    static func badgeOffset(in coverFrame: CGRect) -> CGSize {
+        CGSize(
+            width: coverFrame.maxX - badgeInset - badgeSize,
+            height: coverFrame.minY + badgeInset
+        )
+    }
 
     @State private var image: NSImage?
     @Environment(\.colorScheme) private var colorScheme
@@ -945,7 +959,7 @@ private struct MediaCover: View {
         // slot, so toggling hover never shifts the circle.
         if isWatched || showsWatchedAffordance {
             watchedBadge
-                .padding(8)
+                .padding(Self.badgeInset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         }
     }
@@ -963,7 +977,7 @@ private struct MediaCover: View {
                     .foregroundStyle(.white.opacity(0.9))
             }
         }
-        .frame(width: 24, height: 24)
+        .frame(width: Self.badgeSize, height: Self.badgeSize)
     }
 
     private var playbackAccessibilityValue: String {
