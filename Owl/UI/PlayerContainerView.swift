@@ -186,10 +186,14 @@ struct PlayerContainerView: View {
         .onChange(of: state.subtitleNoticeRevision) { _, _ in
             showSubtitleNotice()
         }
+        .onChange(of: controlsVisible) { _, _ in
+            updateCursorVisibility()
+        }
         .onDisappear {
             hideTask?.cancel()
             errorDismissTask?.cancel()
             subtitleNoticeDismissTask?.cancel()
+            NSCursor.setHiddenUntilMouseMoves(false)
         }
         // A subtitle file is dropped on the picture far more readily than it is
         // found through an open panel, and the picture is the only part of the
@@ -339,6 +343,19 @@ struct PlayerContainerView: View {
     private func revealControls() {
         controlsVisible = true
         scheduleControlsHide()
+    }
+
+    /// Takes the pointer away with the controls, and gives it back with them.
+    ///
+    /// Only in fullscreen. In a window the pointer has a title bar, a dock and
+    /// the rest of the desktop to be wanted for, and the picture has no claim
+    /// on it there; fullscreen there is nothing else on the screen for it to
+    /// point at. `setHiddenUntilMouseMoves` is what brings it back, and any
+    /// movement is also what brings the controls back, so the two return
+    /// together without this having to watch for the movement itself.
+    private func updateCursorVisibility() {
+        let isFullScreen = videoView.window?.styleMask.contains(.fullScreen) ?? false
+        NSCursor.setHiddenUntilMouseMoves(!controlsVisible && isFullScreen)
     }
 
     private func scheduleControlsHide() {
