@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-28
+- Hide the pointer along with the player controls in fullscreen, after the same pause of stillness; moving the mouse brings both back
+
 ## [1.2.0] - 2026-08-28
 - Name the video over the top of the picture whenever the controls are up, so the window always says what is playing — it covers the title bar, and in full screen there is none
 - Remember which subtitle track was chosen for each file — an embedded track, a sidecar file, or off — and restore it when the file is reopened
