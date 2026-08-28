@@ -108,6 +108,13 @@ final class PlayerState: ObservableObject {
         currentURL != nil
     }
 
+    /// What is playing, in the words the file itself gives: its name without
+    /// the extension. The player's title and the system's Now Playing panel
+    /// both read this, so the two can never name the same video differently.
+    var currentTitle: String? {
+        currentURL?.deletingPathExtension().lastPathComponent
+    }
+
     var selectedSubtitleID: Int64? {
         selectedSubtitle?.id
     }

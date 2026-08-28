@@ -85,6 +85,16 @@ struct PlayerContainerView: View {
             }
 
             VStack {
+                if state.hasMedia, let title = state.currentTitle {
+                    titleBar(title)
+                        .opacity(controlsVisible ? 1 : 0)
+                        .allowsHitTesting(false)
+                        .padding(.top, 16)
+                        // Clear of the close button, which floats in the same
+                        // band at the trailing edge.
+                        .padding(.horizontal, 62)
+                }
+
                 if let error = state.errorMessage {
                     errorBanner(error)
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -241,6 +251,23 @@ struct PlayerContainerView: View {
         return true
     }
 
+    /// Names the video over the top of the picture, for as long as the controls
+    /// are up.
+    ///
+    /// The player covers the window whole — title bar strip included, and in
+    /// full screen there is no title bar at all — so without this there is
+    /// nothing on screen that says which video is playing.
+    private func titleBar(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .playerPanel(cornerRadius: 12)
+    }
+
     @ViewBuilder
     private func errorBanner(_ message: String) -> some View {
         HStack(spacing: 10) {
@@ -262,16 +289,7 @@ struct PlayerContainerView: View {
         .font(.callout)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.black.opacity(0.75))
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
-                }
-        }
-        .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+        .playerPanel(cornerRadius: 10)
         .padding()
     }
 
@@ -292,16 +310,7 @@ struct PlayerContainerView: View {
             .monospacedDigit()
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
-            .background {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.black.opacity(0.75))
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
-                    }
-            }
-            .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
+            .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
     }
 
     private var subtitleNoticeText: String {
@@ -359,16 +368,7 @@ private struct PlayerControlsView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 11)
-        .background {
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color.black.opacity(0.72))
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
-                }
-        }
-        .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
+        .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
     }
 
     private var regularControls: some View {
@@ -694,5 +694,27 @@ private struct PlayerControlsView: View {
             return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
         }
         return String(format: "%02d:%02d", minutes, remainingSeconds)
+    }
+}
+
+private extension View {
+    /// The panel every floating piece of the player is drawn on: the controls,
+    /// the title, the error banner, the indicator. One recipe rather than four
+    /// copies of it, so they cannot drift apart.
+    func playerPanel(
+        cornerRadius: CGFloat,
+        shadowRadius: CGFloat = 12,
+        shadowOffset: CGFloat = 4
+    ) -> some View {
+        background {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(Color.black.opacity(0.72))
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                }
+        }
+        .shadow(color: .black.opacity(0.4), radius: shadowRadius, y: shadowOffset)
     }
 }

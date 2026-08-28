@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Name the video over the top of the picture whenever the controls are up, so the window always says what is playing — it covers the title bar, and in full screen there is none
 - Remember which subtitle track was chosen for each file — an embedded track, a sidecar file, or off — and restore it when the file is reopened
 - Prefer the language of the last subtitle track chosen by hand on files never watched before, so the next episode opens on the right one; the preference is shown in the subtitle menu and can be turned off there
 - Drop a subtitle file on the picture to attach it, or a video to play it

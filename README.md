@@ -46,8 +46,8 @@ library and playback progress over, move
   the work's title, description, and artwork. Off by default, and only
   available in builds carrying an API key — see [Metadata
   sync](#metadata-sync).
-- Full-screen playback, with the controls and the pointer both hiding after a
-  moment of stillness, plus macOS Now Playing information and media-key and
+- Full-screen playback, with the video's name over the top of the picture and
+  the controls and the pointer both hiding after a moment of stillness, plus macOS Now Playing information and media-key and
   remote playback controls.
 - Broad local video support through `libmpv`, hardware accelerated where
   supported: MP4, MKV, MOV, AVI, WebM, MPEG, M2TS, FLV, WMV, and the rest of

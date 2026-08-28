@@ -55,7 +55,7 @@ final class NowPlayingCenter {
 
         let state = model.playerState
         var info: [String: Any] = [
-            MPMediaItemPropertyTitle: url.deletingPathExtension().lastPathComponent,
+            MPMediaItemPropertyTitle: state.currentTitle ?? url.lastPathComponent,
             MPMediaItemPropertyAssetURL: url,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: state.currentTime,
             MPNowPlayingInfoPropertyPlaybackRate: state.isPaused ? 0 : 1

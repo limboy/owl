@@ -5,6 +5,15 @@ import XCTest
 final class PlayerStateTests: XCTestCase {
     private let video = URL(fileURLWithPath: "/tmp/owl-tests/A.mp4")
 
+    func testTheTitleIsTheFileNameWithoutItsExtension() {
+        let state = PlayerState()
+        XCTAssertNil(state.currentTitle, "nothing is playing")
+
+        state.resetForLoad(URL(fileURLWithPath: "/tmp/owl-tests/Mad Men - S04E11.mkv"))
+
+        XCTAssertEqual(state.currentTitle, "Mad Men - S04E11")
+    }
+
     func testResetForLoadClearsThePausedFlag() {
         let state = PlayerState()
         state.reset()
