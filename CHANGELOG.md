@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-28
+- Resize the player window to match the video's aspect ratio, with smoother fullscreen transitions
+
 ## [1.0.2] - 2026-08-27
 - Improve contrast and visibility of the video player controls and scrubber
 - Adjust grid item size and subtitle font in the library browser for improved spacing and readability
