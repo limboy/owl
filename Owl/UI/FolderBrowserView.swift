@@ -37,15 +37,6 @@ struct FolderBrowserView: View {
         NavigationSplitView {
             sidebar
                 .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 300)
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button(action: chooseFolders) {
-                            Image(systemName: "folder.badge.plus")
-                        }
-                        .help("Add Folder")
-                        .accessibilityLabel("Add Folder")
-                    }
-                }
         } detail: {
             browserDetail
                 .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
@@ -61,6 +52,21 @@ struct FolderBrowserView: View {
 
                     ToolbarItem(placement: .primaryAction) {
                         playbackOptionsMenu
+                    }
+
+                    // Add Folder stays in the title bar whether or not the
+                    // sidebar is showing. A toolbar item that comes and goes
+                    // with the sidebar re-lays the title bar out the moment
+                    // the toggle is clicked, ahead of the split animation, so
+                    // the controls jump before anything slides.
+                    ToolbarSpacer(.fixed)
+
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: chooseFolders) {
+                            Image(systemName: "folder.badge.plus")
+                        }
+                        .help("Add Folder")
+                        .accessibilityLabel("Add Folder")
                     }
                 }
                 // The toolbar is drawn in the title bar, above the content, so
@@ -197,11 +203,11 @@ struct FolderBrowserView: View {
     /// How far into the window the window buttons and the sidebar toggle reach.
     private static let titleBarControlsWidth: CGFloat = 156
 
-    /// How much of the trailing title bar strip the layout picker and playback
-    /// options menu take up. The header runs up under the title bar, so the
-    /// title has to stop short of these controls rather than truncate beneath
-    /// them.
-    private static let toolbarControlsWidth: CGFloat = 154
+    /// How much of the trailing title bar strip the layout picker, playback
+    /// options menu, and Add Folder button take up. The header runs up under
+    /// the title bar, so the title has to stop short of these controls rather
+    /// than truncate beneath them.
+    private static let toolbarControlsWidth: CGFloat = 206
 
     private static let splitSpace = "BrowserSplit"
 
