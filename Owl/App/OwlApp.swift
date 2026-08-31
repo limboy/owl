@@ -44,7 +44,7 @@ struct OwlApp: App {
                         .frame(width: 0, height: 0)
                     WindowTitleHidden()
                         .frame(width: 0, height: 0)
-                    FullScreenTransition()
+                    FullScreenTransition(playerState: appModel.playerState)
                         .frame(width: 0, height: 0)
                 }
         }

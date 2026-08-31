@@ -92,14 +92,16 @@ final class FullScreenFrameAnimator {
 /// the fullscreen methods are answered here and everything else — closing,
 /// becoming key, the rest of the window's life — is passed straight through.
 struct FullScreenTransition: NSViewRepresentable {
+    let playerState: PlayerState
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
-        FullScreenTransitionDelegate.install(on: view)
+        FullScreenTransitionDelegate.install(on: view, playerState: playerState)
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        FullScreenTransitionDelegate.install(on: nsView)
+        FullScreenTransitionDelegate.install(on: nsView, playerState: playerState)
     }
 }
 
@@ -117,28 +119,37 @@ struct FullScreenTransition: NSViewRepresentable {
 private final class FullScreenTransitionDelegate: NSObject, NSWindowDelegate {
     private static var delegates: [ObjectIdentifier: FullScreenTransitionDelegate] = [:]
 
-    static func install(on view: NSView) {
+    static func install(on view: NSView, playerState: PlayerState) {
         guard let window = view.window else {
             // The view has no window during the first layout pass.
-            DispatchQueue.main.async { [weak view] in
+            DispatchQueue.main.async { [weak view, weak playerState] in
+                guard let playerState else { return }
                 guard let view else { return }
-                install(on: view)
+                install(on: view, playerState: playerState)
             }
             return
         }
 
         let identifier = ObjectIdentifier(window)
-        guard delegates[identifier] == nil else { return }
-        let delegate = FullScreenTransitionDelegate(displacing: window.delegate)
+        if let delegate = delegates[identifier] {
+            delegate.playerState = playerState
+            return
+        }
+        let delegate = FullScreenTransitionDelegate(
+            displacing: window.delegate,
+            playerState: playerState
+        )
         delegates[identifier] = delegate
         window.delegate = delegate
     }
 
     private let base: NSWindowDelegate?
     private let animator = FullScreenFrameAnimator()
+    private weak var playerState: PlayerState?
 
-    private init(displacing base: NSWindowDelegate?) {
+    private init(displacing base: NSWindowDelegate?, playerState: PlayerState) {
         self.base = base
+        self.playerState = playerState
     }
 
     override func responds(to selector: Selector!) -> Bool {
@@ -159,7 +170,7 @@ private final class FullScreenTransitionDelegate: NSObject, NSWindowDelegate {
     }
 
     func customWindowsToEnterFullScreen(for window: NSWindow) -> [NSWindow]? {
-        [window]
+        playerState?.hasMedia == true ? [window] : nil
     }
 
     func window(
@@ -170,7 +181,7 @@ private final class FullScreenTransitionDelegate: NSObject, NSWindowDelegate {
     }
 
     func customWindowsToExitFullScreen(for window: NSWindow) -> [NSWindow]? {
-        [window]
+        playerState?.hasMedia == true ? [window] : nil
     }
 
     func window(
@@ -195,4 +206,5 @@ private final class FullScreenTransitionDelegate: NSObject, NSWindowDelegate {
         guard let window = notification.object as? NSWindow else { return }
         Self.delegates[ObjectIdentifier(window)] = nil
     }
+
 }

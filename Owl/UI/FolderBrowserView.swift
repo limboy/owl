@@ -123,32 +123,38 @@ struct FolderBrowserView: View {
             .padding(.trailing, 48)
             .frame(height: 44)
 
+            Text("Folders")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .frame(height: 24, alignment: .bottom)
+
             List(selection: $selectedRootID) {
-                Section("Folders") {
-                    ForEach(library.roots) { root in
-                        Label {
-                            Text(root.displayName)
-                                .foregroundStyle(root.isAvailable ? .primary : .secondary)
-                        } icon: {
-                            Image(systemName: root.isAvailable ? "folder" : "folder.badge.questionmark")
-                                .symbolRenderingMode(.hierarchical)
+                ForEach(library.roots) { root in
+                    Label {
+                        Text(root.displayName)
+                            .foregroundStyle(root.isAvailable ? .primary : .secondary)
+                    } icon: {
+                        Image(systemName: root.isAvailable ? "folder" : "folder.badge.questionmark")
+                            .symbolRenderingMode(.hierarchical)
+                    }
+                    .tag(root.id)
+                    .contextMenu {
+                        if root.isAvailable {
+                            Button("Show in Finder") { showInFinder(root) }
+                        } else {
+                            Button("Reconnect…") { reconnect(root) }
                         }
-                        .tag(root.id)
-                        .contextMenu {
-                            if root.isAvailable {
-                                Button("Show in Finder") { showInFinder(root) }
-                            } else {
-                                Button("Reconnect…") { reconnect(root) }
-                            }
-                            Divider()
-                            Button("Remove Folder", role: .destructive) {
-                                library.removeRoot(id: root.id)
-                            }
+                        Divider()
+                        Button("Remove Folder", role: .destructive) {
+                            library.removeRoot(id: root.id)
                         }
                     }
                 }
             }
             .listStyle(.sidebar)
+            .contentMargins(.top, 0, for: .scrollContent)
             .focused($isSidebarFocused)
             .onChange(of: selectedRootID) { _, rootID in
                 guard let rootID,
