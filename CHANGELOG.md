@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.2.5] - 2026-08-31
+- Keep the Add Folder button in the window toolbar, so the sidebar toggle no longer jumps to a new spot before the sidebar starts to open or close
+
 ## [1.2.4] - 2026-08-31
 - Move the Add Folder button to the window toolbar and refine the sidebar folder list layout
 - Limit custom fullscreen transitions to when media is actively playing
