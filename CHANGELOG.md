@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-08-31
+- Move the Add Folder button to the window toolbar and refine the sidebar folder list layout
+- Limit custom fullscreen transitions to when media is actively playing
+
 ## [1.2.3] - 2026-08-28
 - Fix the watched checkbox in List view, which opened the video instead of marking it watched when clicked
 
