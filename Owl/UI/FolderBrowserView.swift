@@ -37,7 +37,15 @@ struct FolderBrowserView: View {
         NavigationSplitView {
             sidebar
                 .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 300)
-                .ignoresSafeArea(.container, edges: .top)
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(action: chooseFolders) {
+                            Image(systemName: "folder.badge.plus")
+                        }
+                        .help("Add Folder")
+                        .accessibilityLabel("Add Folder")
+                    }
+                }
         } detail: {
             browserDetail
                 .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
@@ -105,24 +113,6 @@ struct FolderBrowserView: View {
 
     private var sidebar: some View {
         VStack(spacing: 0) {
-            HStack {
-                Spacer()
-
-                Button(action: chooseFolders) {
-                    Image(systemName: "folder.badge.plus")
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-                .offset(y: -5)
-                .help("Add Folder")
-                .accessibilityLabel("Add Folder")
-            }
-            .padding(.leading, 10)
-            .padding(.trailing, 48)
-            .frame(height: 44)
-
             Text("Folders")
                 .font(.caption)
                 .foregroundStyle(.secondary)
