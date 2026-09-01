@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.2.6] - 2026-09-01
+- Fix the picture stuttering every few seconds while playing a video from a folder
+- Drop the file name from over the picture in a window opened on a single video — its own title bar already names the file
+
 ## [1.2.5] - 2026-08-31
 - Keep the Add Folder button in the window toolbar, so the sidebar toggle no longer jumps to a new spot before the sidebar starts to open or close
 
