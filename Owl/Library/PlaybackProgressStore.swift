@@ -59,6 +59,13 @@ final class PlaybackProgressStore: ObservableObject {
 
     private let storageURL: URL
 
+    /// Serial, so writes land in the order they were asked for and the last
+    /// snapshot handed over is the one left on disk.
+    private let persistQueue = DispatchQueue(
+        label: "me.limboy.owl.progress-store",
+        qos: .utility
+    )
+
     init(storageURL: URL? = nil) {
         if let storageURL {
             self.storageURL = storageURL
@@ -178,16 +185,36 @@ final class PlaybackProgressStore: ObservableObject {
         entries.removeSubrange(Self.maximumEntryCount...)
     }
 
+    /// Encodes and writes off the main thread.
+    ///
+    /// A playing video records its position every few seconds, and the whole
+    /// store — up to `maximumEntryCount` entries — is re-encoded and rewritten
+    /// each time. mpv's frames are only ever presented from the main thread, so
+    /// an encode plus an atomic write there stalls the picture for as long as
+    /// the disk takes to answer, which on a busy or remote volume is long
+    /// enough to see.
     private func persist() {
-        do {
-            try FileManager.default.createDirectory(
-                at: storageURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            let data = try JSONEncoder().encode(entries)
-            try data.write(to: storageURL, options: .atomic)
-        } catch {
-            // Playback progress is best-effort and should never interrupt playback.
+        // Snapshotted on the main actor, where `entries` lives, and handed to
+        // the queue as a value: the writer never reads the store itself.
+        let snapshot = entries
+        let storageURL = self.storageURL
+        persistQueue.async {
+            do {
+                try FileManager.default.createDirectory(
+                    at: storageURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                let data = try JSONEncoder().encode(snapshot)
+                try data.write(to: storageURL, options: .atomic)
+            } catch {
+                // Playback progress is best-effort and should never interrupt playback.
+            }
         }
+    }
+
+    /// Returns once every write asked for so far has landed. For a caller that
+    /// has just recorded something and is about to read the file back.
+    func waitForPendingWrites() {
+        persistQueue.sync {}
     }
 }

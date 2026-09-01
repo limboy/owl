@@ -9,8 +9,16 @@ struct FolderBrowserView: View {
 
     @ObservedObject var appModel: AppModel
     @ObservedObject private var library: FolderLibrary
-    @ObservedObject private var playerState: PlayerState
     @ObservedObject private var playbackQueue: PlaybackQueue
+
+    /// Whether a video is up, passed in rather than read from `PlayerState`.
+    ///
+    /// The browser stays in the hierarchy underneath the picture, so observing
+    /// the player would re-evaluate this whole view — split view, toolbar,
+    /// sidebar and every row in the folder — each time the clock ticks, several
+    /// times a second, for the entire time a video plays. It is the position
+    /// that moves that often; whether there is a video at all changes twice.
+    private let hasMedia: Bool
     @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
     @State private var isDropTargeted = false
     @State private var selectedRootID: UUID?
@@ -26,10 +34,10 @@ struct FolderBrowserView: View {
         GridItem(.adaptive(minimum: 450, maximum: 900), spacing: 8, alignment: .topLeading)
     ]
 
-    init(appModel: AppModel, library: FolderLibrary) {
+    init(appModel: AppModel, library: FolderLibrary, hasMedia: Bool) {
         self.appModel = appModel
+        self.hasMedia = hasMedia
         _library = ObservedObject(wrappedValue: library)
-        _playerState = ObservedObject(wrappedValue: appModel.playerState)
         _playbackQueue = ObservedObject(wrappedValue: appModel.playbackQueue)
     }
 
@@ -73,7 +81,7 @@ struct FolderBrowserView: View {
                 // a picture that covers the window would still be picked at by
                 // the layout control. There is no layout to choose while the
                 // video is up.
-                .toolbar(playerState.hasMedia ? .hidden : .automatic, for: .windowToolbar)
+                .toolbar(hasMedia ? .hidden : .automatic, for: .windowToolbar)
         }
         .navigationSplitViewStyle(.balanced)
         .coordinateSpace(.named(Self.splitSpace))

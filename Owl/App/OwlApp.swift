@@ -77,6 +77,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             FilePlayerWindows.shared.open(url)
         }
     }
+
+    /// Progress is written on a background queue so that a playing video is
+    /// never held up by the disk. Quitting is the one moment that has to wait
+    /// for it: the position recorded as the last window closed is still on its
+    /// way out, and the process is about to end underneath it.
+    func applicationWillTerminate(_ notification: Notification) {
+        PlaybackProgressStore.shared.waitForPendingWrites()
+    }
 }
 
 /// The "Check for Updates…" menu item.

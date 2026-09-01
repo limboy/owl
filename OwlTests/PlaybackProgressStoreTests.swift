@@ -26,6 +26,7 @@ final class PlaybackProgressStoreTests: XCTestCase {
         let store = PlaybackProgressStore(storageURL: storageURL)
 
         store.record(url: video, position: 120, duration: 600)
+        store.waitForPendingWrites()
 
         let restored = PlaybackProgressStore(storageURL: storageURL)
         XCTAssertEqual(restored.progress(for: video)?.position, 120)

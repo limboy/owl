@@ -58,7 +58,7 @@ private struct PlayerLayout: View {
 
     var body: some View {
         ZStack {
-            FolderBrowserView(appModel: appModel, library: library)
+            FolderBrowserView(appModel: appModel, library: library, hasMedia: state.hasMedia)
 
             if state.hasMedia, !isDismissing {
                 playerOverlay
