@@ -10,6 +10,15 @@ struct PlayerContainerView: View {
     /// nothing to go on to, so it is shown neither previous nor next controls.
     let showsQueueControls: Bool
 
+    /// Whether to name the video over the picture.
+    ///
+    /// Only for a host that has covered the window's own title bar with the
+    /// player. A window opened on one file keeps its title bar — floating over
+    /// the picture, and revealed by the pointer in full screen — and that title
+    /// bar already carries the file's name and its icon, so a second copy of
+    /// the name laid over the top of the video says nothing new.
+    let showsTitle: Bool
+
     /// Dismisses the current video, if this host has somewhere to dismiss it
     /// to. Hosts that pass nothing are shown no close button.
     ///
@@ -43,12 +52,14 @@ struct PlayerContainerView: View {
         engine: MPVPlayerEngine,
         videoView: OwlVideoView,
         showsQueueControls: Bool = true,
+        showsTitle: Bool = true,
         onClose: (@MainActor () -> Void)? = nil
     ) {
         self.appModel = appModel
         self.engine = engine
         self.videoView = videoView
         self.showsQueueControls = showsQueueControls
+        self.showsTitle = showsTitle
         self.onClose = onClose
         _state = ObservedObject(wrappedValue: appModel.playerState)
     }
@@ -85,7 +96,7 @@ struct PlayerContainerView: View {
             }
 
             VStack {
-                if state.hasMedia, let title = state.currentTitle {
+                if showsTitle, state.hasMedia, let title = state.currentTitle {
                     titleBar(title)
                         .opacity(controlsVisible ? 1 : 0)
                         .allowsHitTesting(false)
@@ -258,9 +269,10 @@ struct PlayerContainerView: View {
     /// Names the video over the top of the picture, for as long as the controls
     /// are up.
     ///
-    /// The player covers the window whole — title bar strip included, and in
-    /// full screen there is no title bar at all — so without this there is
-    /// nothing on screen that says which video is playing.
+    /// For a host that covers the window whole — title bar strip included, and
+    /// in full screen there is no title bar at all — so without this there is
+    /// nothing on screen that says which video is playing. A host whose window
+    /// keeps its own title bar passes `showsTitle: false` instead.
     private func titleBar(_ title: String) -> some View {
         Text(title)
             .font(.system(size: 14, weight: .semibold))
