@@ -23,7 +23,7 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
     private let engine: MPVPlayerEngine
     private let queue = DispatchQueue(
         label: "me.limboy.owl.opengl-render",
-        qos: .default
+        qos: .userInteractive
     )
     private let stateLock = NSLock()
     private var context: NSOpenGLContext?
@@ -182,6 +182,8 @@ final class OwlVideoView: NSOpenGLView {
     /// holding a pointer to freed memory.
     private var procAddressContext: UnsafeMutableRawPointer?
     private var renderUpdateContext: UnsafeMutableRawPointer?
+    private var windowObservers: [NSObjectProtocol] = []
+
 
     init(engine: MPVPlayerEngine) {
         self.engine = engine
@@ -316,8 +318,63 @@ final class OwlVideoView: NSOpenGLView {
             needsDisplay = true
         }
     }
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil {
+            clearWindowObservers()
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        clearWindowObservers()
+        guard let window else { return }
+
+        openGLContext?.lock()
+        openGLContext?.update()
+        openGLContext?.unlock()
+
+        let occlusionObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let window = self.window else { return }
+                if window.occlusionState.contains(.visible) {
+                    self.openGLContext?.lock()
+                    self.openGLContext?.update()
+                    self.openGLContext?.unlock()
+                    self.needsDisplay = true
+                }
+            }
+        }
+        let screenObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeScreenNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.openGLContext?.lock()
+                self.openGLContext?.update()
+                self.openGLContext?.unlock()
+                self.needsDisplay = true
+            }
+        }
+        windowObservers = [occlusionObserver, screenObserver]
+    }
+
+    private func clearWindowObservers() {
+        for observer in windowObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        windowObservers.removeAll()
+    }
+
 
     func detachRenderer() {
+        clearWindowObservers()
         guard isRendererReady else { return }
         mvp_mpv_set_render_update_callback(engine.rawHandle, nil, nil)
         isRendererReady = false

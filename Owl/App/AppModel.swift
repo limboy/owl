@@ -484,7 +484,12 @@ final class AppModel: ObservableObject {
     private func setPlaybackKeepingDisplayAwake(_ isPlaying: Bool) {
         if isPlaying, playbackActivity == nil {
             playbackActivity = ProcessInfo.processInfo.beginActivity(
-                options: [.idleDisplaySleepDisabled, .idleSystemSleepDisabled],
+                options: [
+                    .idleDisplaySleepDisabled,
+                    .idleSystemSleepDisabled,
+                    .userInitiated,
+                    .latencyCritical
+                ],
                 reason: "Playing video"
             )
         } else if !isPlaying, let playbackActivity {

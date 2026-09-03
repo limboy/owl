@@ -80,5 +80,7 @@
 	<string>B6+JHJ8tGYlOk0bFN5Ldnn+U40ebdkWsqWYg9nZMh0A=</string>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
+	<key>NSAppSleepDisabled</key>
+	<true/>
 </dict>
 </plist>

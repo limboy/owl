@@ -70,11 +70,13 @@ private struct PlayerLayout: View {
         .animation(Self.playerTransition, value: state.hasMedia)
     }
 
-    /// Sends the picture off the bottom of the window with playback still
-    /// running, and only stops it once the overlay has left. Closing the video
+    /// Sends the picture off the bottom of the window with the current frame
+    /// frozen on screen, pausing playback so the dismiss animation does not
+    /// contend with continuous decoding and frame drawing. Closing the video
     /// first would blank the surface and slide an empty black panel away.
     private func dismissPlayer() {
         guard !isDismissing else { return }
+        appModel.yieldPlayback()
         withAnimation(Self.playerTransition, completionCriteria: .removed) {
             isDismissing = true
         } completion: {
