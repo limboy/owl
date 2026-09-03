@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [1.2.7] - 2026-09-03
+- Keep the app running at full speed during playback instead of being throttled in the background
+- Fix the video picture sometimes staying stale after moving the window to another display or bringing it back from being hidden
+- Freeze the picture and pause playback while the player closes, for a smoother closing animation
+
 ## [1.2.6] - 2026-09-01
 - Fix the picture stuttering every few seconds while playing a video from a folder
 - Drop the file name from over the picture in a window opened on a single video — its own title bar already names the file

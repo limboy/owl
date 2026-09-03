@@ -119,7 +119,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: me.limboy.owl
         PRODUCT_NAME: Owl
         PRODUCT_MODULE_NAME: Owl
-        MARKETING_VERSION: "1.2.6"
+        MARKETING_VERSION: "1.2.7"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Owl
