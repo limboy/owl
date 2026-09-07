@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.2.8] - 2026-09-07
+- Keep the picture smooth by drawing video on its own worker, so a stalled frame no longer holds up playback
+
 ## [1.2.7] - 2026-09-03
 - Keep the app running at full speed during playback instead of being throttled in the background
 - Fix the video picture sometimes staying stale after moving the window to another display or bringing it back from being hidden
