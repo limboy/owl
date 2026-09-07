@@ -95,8 +95,7 @@ enum {
     MPV_RENDER_PARAM_API_TYPE = 1,
     MPV_RENDER_PARAM_OPENGL_INIT_PARAMS = 2,
     MPV_RENDER_PARAM_OPENGL_FBO = 3,
-    MPV_RENDER_PARAM_FLIP_Y = 4,
-    MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME = 12
+    MPV_RENDER_PARAM_FLIP_Y = 4
 };
 
 typedef unsigned long (*fn_mpv_client_api_version)(void);
@@ -661,12 +660,18 @@ int mvp_mpv_render(
     int framebuffer,
     int width,
     int height,
-    bool flip_y
+    bool flip_y,
+    bool force_redraw
 ) {
     if (player == NULL || player->render_context == NULL || width <= 0 || height <= 0) {
         return -1;
     }
-    player->render_context_update(player->render_context);
+    uint64_t updates = player->render_context_update(player->render_context);
+    // MPV_RENDER_UPDATE_FRAME = 1. A coalesced callback can outlive its frame;
+    // only an exposure/resize needs to redraw an unchanged frame.
+    if (!(updates & 1) && !force_redraw) {
+        return 0;
+    }
     mpv_opengl_fbo fbo = {
         .fbo = framebuffer,
         .width = width,
@@ -674,16 +679,16 @@ int mvp_mpv_render(
         .internal_format = 0
     };
     int flip = flip_y ? 1 : 0;
-    // The render worker should not wait for mpv's target presentation time;
-    // AppKit and the update callback schedule the next draw.
-    int block_for_target_time = 0;
+    // Keep mpv's default target-time wait. Its update callback arrives BEFORE
+    // presentation is due; it is not a presentation clock. The dedicated
+    // render worker can wait here without blocking the main run loop.
     mpv_render_param parameters[] = {
         { MPV_RENDER_PARAM_OPENGL_FBO, &fbo },
         { MPV_RENDER_PARAM_FLIP_Y, &flip },
-        { MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &block_for_target_time },
         { MPV_RENDER_PARAM_INVALID, NULL }
     };
-    return player->render_context_render(player->render_context, parameters);
+    int status = player->render_context_render(player->render_context, parameters);
+    return status < 0 ? status : 1;
 }
 
 void mvp_mpv_report_swap(MVPMPVPlayer *player) {

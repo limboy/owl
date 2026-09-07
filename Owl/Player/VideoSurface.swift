@@ -42,9 +42,12 @@ final class VideoSurfaceHostView: NSView {
             videoView.frame = bounds
             videoView.autoresizingMask = [.width, .height]
             addSubview(videoView)
+            videoView.needsDisplay = true
         }
 
-        videoView.frame = bounds
-        videoView.needsDisplay = true
+        if videoView.frame != bounds {
+            videoView.frame = bounds
+            videoView.needsDisplay = true
+        }
     }
 }

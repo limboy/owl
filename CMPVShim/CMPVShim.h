@@ -109,12 +109,14 @@ void mvp_mpv_set_render_update_callback(
     MVPMPVCallback callback,
     void *context
 );
+// Returns 1 after rendering, 0 when no frame needs drawing, or a negative error.
 int mvp_mpv_render(
     MVPMPVPlayer *player,
     int framebuffer,
     int width,
     int height,
-    bool flip_y
+    bool flip_y,
+    bool force_redraw
 );
 void mvp_mpv_report_swap(MVPMPVPlayer *player);
 void mvp_mpv_destroy_renderer(MVPMPVPlayer *player);

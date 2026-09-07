@@ -16,7 +16,7 @@ private func mpvOpenGLGetProcAddress(
 }
 
 private func mpvRenderUpdate(context: UnsafeMutableRawPointer?) {
-    MPVCallbackContext<OwlVideoView>.target(of: context)?.requestDisplay()
+    MPVCallbackContext<MVOpenGLRenderWorker>.target(of: context)?.requestRender()
 }
 
 private final class MVOpenGLRenderWorker: @unchecked Sendable {
@@ -29,8 +29,15 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
     private var context: NSOpenGLContext?
     private var isActive = false
     private var isVideoRenderingEnabled = false
-    private var pendingSize: (width: Int, height: Int)?
+    private var drawableSize = (width: 0, height: 0)
+    private var renderPending = false
+    private var redrawPending = false
     private var renderScheduled = false
+    private var completedFrames: UInt64 = 0
+
+    var renderedFrameCount: UInt64 {
+        stateLock.withLock { completedFrames }
+    }
 
     init(engine: MPVPlayerEngine) {
         self.engine = engine
@@ -43,20 +50,28 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
         }
     }
 
+    /// AppKit owns geometry; callbacks use this cached size without waiting
+    /// for the main run loop to draw the view.
     func enqueue(width: Int, height: Int) {
-        let shouldSchedule = stateLock.withLock {
-            guard isActive, isVideoRenderingEnabled else { return false }
+        stateLock.withLock { drawableSize = (width, height) }
+        requestRender(forceRedraw: true)
+    }
 
-            // During a window animation AppKit can request draws faster than the
-            // OpenGL surface can be resized and rendered. Keep only the newest
-            // size instead of building a queue of already-obsolete frames.
-            pendingSize = (width, height)
+    func requestRender(forceRedraw: Bool = false) {
+        let shouldSchedule = stateLock.withLock {
+            guard isActive, isVideoRenderingEnabled,
+                  drawableSize.width > 0, drawableSize.height > 0
+            else { return false }
+            renderPending = true
+            redrawPending = redrawPending || forceRedraw
             guard !renderScheduled else { return false }
             renderScheduled = true
             return true
         }
         guard shouldSchedule else { return }
 
+        // Never call mpv or hold stateLock while entering it from a callback.
+        // A callback during rendering leaves one more pass for the worker.
         queue.async { [weak self] in
             self?.drainPendingRenders()
         }
@@ -66,7 +81,8 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
         stateLock.withLock {
             isVideoRenderingEnabled = enabled
             if !enabled {
-                pendingSize = nil
+                renderPending = false
+                redrawPending = false
             }
         }
         if !enabled {
@@ -79,7 +95,8 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
     func deactivate() {
         stateLock.withLock {
             isActive = false
-            pendingSize = nil
+            renderPending = false
+            redrawPending = false
         }
         // Synchronous on purpose: the caller shuts the engine down as soon as
         // this returns, and mvp_mpv_destroy frees the render context too. A
@@ -99,7 +116,7 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
         }
     }
 
-    private func render(width: Int, height: Int) {
+    private func render(width: Int, height: Int, forceRedraw: Bool) {
         guard let context = stateLock.withLock({
             isActive && isVideoRenderingEnabled ? self.context : nil
         }) else { return }
@@ -110,34 +127,37 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
         defer { NSOpenGLContext.clearCurrentContext() }
         var framebuffer: GLint = 0
         glGetIntegerv(GLenum(GL_DRAW_FRAMEBUFFER_BINDING), &framebuffer)
-        _ = mvp_mpv_render(
+        let result = mvp_mpv_render(
             engine.rawHandle,
             framebuffer,
             Int32(width),
             Int32(height),
-            true
+            true,
+            forceRedraw
         )
+        guard result > 0 else { return }
         context.flushBuffer()
         mvp_mpv_report_swap(engine.rawHandle)
+        stateLock.withLock { completedFrames &+= 1 }
     }
 
     private func drainPendingRenders() {
         while true {
-            let size = stateLock.withLock { () -> (width: Int, height: Int)? in
-                guard isActive, isVideoRenderingEnabled else {
-                    pendingSize = nil
+            let request = stateLock.withLock { () -> (width: Int, height: Int, redraw: Bool)? in
+                guard isActive, isVideoRenderingEnabled, renderPending,
+                      drawableSize.width > 0, drawableSize.height > 0 else {
+                    renderPending = false
+                    redrawPending = false
                     renderScheduled = false
                     return nil
                 }
-                guard let pendingSize else {
-                    renderScheduled = false
-                    return nil
-                }
-                self.pendingSize = nil
-                return pendingSize
+                let request = (drawableSize.width, drawableSize.height, redrawPending)
+                renderPending = false
+                redrawPending = false
+                return request
             }
-            guard let size else { return }
-            render(width: size.width, height: size.height)
+            guard let request else { return }
+            render(width: request.width, height: request.height, forceRedraw: request.redraw)
         }
     }
 
@@ -162,6 +182,8 @@ final class OwlVideoView: NSOpenGLView {
     fileprivate nonisolated(unsafe) let openGLLibrary: UnsafeMutableRawPointer?
     private let renderWorker: MVOpenGLRenderWorker
 
+    var renderedFrameCount: UInt64 { renderWorker.renderedFrameCount }
+
     /// Whether mpv has a render context to open files against, and the one
     /// notification of it being made.
     ///
@@ -173,8 +195,6 @@ final class OwlVideoView: NSOpenGLView {
     /// window that opens onto a file has to wait for this.
     private(set) var isRendererReady = false
     var onRendererReady: (@MainActor () -> Void)?
-    private nonisolated let displayRequestLock = NSLock()
-    private nonisolated(unsafe) var displayRequestPending = false
 
     /// Owned by the render context and by mpv respectively, until
     /// `detachRenderer` tears both down. A view released without that call
@@ -222,9 +242,9 @@ final class OwlVideoView: NSOpenGLView {
         guard let openGLContext else { return }
         openGLContext.makeCurrentContext()
 
-        // Do not add a vertical-refresh wait on top of libmpv's frame timing.
-        // Buffer presentation itself runs on renderWorker's default-QoS queue.
-        var swapInterval: GLint = 0
+        // Present on the display refresh after mpv's target-time wait. Both
+        // waits run on the render worker, independently of AppKit's run loop.
+        var swapInterval: GLint = 1
         openGLContext.setValues(&swapInterval, for: .swapInterval)
 
         // mpv keeps this for as long as the render context lives, not just for
@@ -255,7 +275,7 @@ final class OwlVideoView: NSOpenGLView {
         self.procAddressContext = procAddressContext
         isRendererReady = true
         renderWorker.activate(context: openGLContext)
-        let renderUpdateContext = MPVCallbackContext<OwlVideoView>.passRetained(self)
+        let renderUpdateContext = MPVCallbackContext<MVOpenGLRenderWorker>.passRetained(renderWorker)
         self.renderUpdateContext = renderUpdateContext
         mvp_mpv_set_render_update_callback(
             engine.rawHandle,
@@ -295,23 +315,6 @@ final class OwlVideoView: NSOpenGLView {
         renderWorker.enqueue(width: width, height: height)
     }
 
-    fileprivate nonisolated func requestDisplay() {
-        let shouldSchedule = displayRequestLock.withLock {
-            guard !displayRequestPending else { return false }
-            displayRequestPending = true
-            return true
-        }
-        guard shouldSchedule else { return }
-
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.displayRequestLock.withLock {
-                self.displayRequestPending = false
-            }
-            self.needsDisplay = true
-        }
-    }
-
     func setVideoRenderingEnabled(_ enabled: Bool) {
         renderWorker.setVideoRenderingEnabled(enabled)
         if enabled {
@@ -322,6 +325,7 @@ final class OwlVideoView: NSOpenGLView {
         super.viewWillMove(toWindow: newWindow)
         if newWindow == nil {
             clearWindowObservers()
+            renderWorker.enqueue(width: 0, height: 0)
         }
     }
 
@@ -382,7 +386,7 @@ final class OwlVideoView: NSOpenGLView {
         // after which neither callback can be entered again and the boxes
         // holding this view can be let go.
         renderWorker.deactivate()
-        MPVCallbackContext<OwlVideoView>.release(renderUpdateContext)
+        MPVCallbackContext<MVOpenGLRenderWorker>.release(renderUpdateContext)
         renderUpdateContext = nil
         MPVCallbackContext<OwlVideoView>.release(procAddressContext)
         procAddressContext = nil

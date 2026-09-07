@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import XCTest
 @testable import Owl
@@ -9,6 +10,114 @@ import XCTest
 /// mpv. Only an actual player exercises that ordering.
 @MainActor
 final class MPVPlayerEngineTests: XCTestCase {
+    func testVideoKeepsRenderingWhileTheMainThreadIsBusy() async throws {
+        try await withVideoSurface { _, view, _ in
+            let before = view.renderedFrameCount
+            // Deliberately block AppKit, as a folder scan or system service can.
+            // A 10 fps video must still present several frames in this interval.
+            usleep(700_000)
+            let rendered = view.renderedFrameCount - before
+            print("Frames rendered during 700 ms main-thread stall: \(rendered)")
+            XCTAssertGreaterThanOrEqual(rendered, 4)
+        }
+    }
+
+    func testVideoWithAudioKeepsRenderingWhileTheMainThreadIsBusy() async throws {
+        try await withVideoSurface(frameRate: 24, includesAudio: true) { _, view, _ in
+            let before = view.renderedFrameCount
+            usleep(700_000)
+            let rendered = view.renderedFrameCount - before
+            print("24 fps with audio: \(rendered) frames during 700 ms main-thread stall")
+            XCTAssertGreaterThanOrEqual(rendered, 12)
+        }
+    }
+
+    func testRenderingSurvivesPauseResizeSeekAndReattachingTheSurface() async throws {
+        try await withVideoSurface { engine, view, window in
+            engine.setPaused(true)
+            try await waitUntil { engine.state.isPaused }
+            try await Task.sleep(for: .milliseconds(300))
+            let paused = view.renderedFrameCount
+            try await Task.sleep(for: .milliseconds(300))
+            XCTAssertEqual(view.renderedFrameCount, paused, "paused playback should not spin")
+
+            window.setContentSize(NSSize(width: 480, height: 270))
+            view.needsDisplay = true
+            try await waitUntil { view.renderedFrameCount > paused }
+            XCTAssertGreaterThan(view.renderedFrameCount, paused, "resize must redraw a paused frame")
+
+            let beforeSeek = view.renderedFrameCount
+            engine.seek(to: 3)
+            try await waitUntil { view.renderedFrameCount > beforeSeek }
+            XCTAssertGreaterThan(view.renderedFrameCount, beforeSeek, "paused seek must draw its new frame")
+
+            view.setVideoRenderingEnabled(false)
+            try await Task.sleep(for: .milliseconds(200))
+            let disabled = view.renderedFrameCount
+            view.needsDisplay = true
+            try await Task.sleep(for: .milliseconds(200))
+            XCTAssertEqual(view.renderedFrameCount, disabled)
+
+            view.removeFromSuperview()
+            window.contentView = view
+            view.setVideoRenderingEnabled(true)
+            engine.setPaused(false)
+            try await waitUntil { view.renderedFrameCount >= disabled + 4 }
+            XCTAssertGreaterThanOrEqual(view.renderedFrameCount, disabled + 4)
+            XCTAssertNil(engine.state.errorMessage)
+        }
+    }
+
+    func testSixtyFPSPlaybackKeepsRenderingThroughRepeatedMainThreadStalls() async throws {
+        try await withVideoSurface(frameRate: 60, duration: 70) { engine, view, _ in
+            // Exercise sustained playback, including callback coalescing after
+            // UI stalls. Leave the run loop free between each disturbance.
+            for round in 1...12 {
+                try await Task.sleep(for: .seconds(4.5))
+                let before = view.renderedFrameCount
+                usleep(500_000)
+                let rendered = view.renderedFrameCount - before
+                print("60 fps, stall \(round): \(rendered) frames in 500 ms")
+                XCTAssertGreaterThanOrEqual(rendered, 20, "rendering stalled in round \(round)")
+            }
+            XCTAssertNil(engine.state.errorMessage)
+        }
+    }
+
+    private func withVideoSurface(
+        frameRate: Int = 10,
+        duration: Int = 10,
+        includesAudio: Bool = false,
+        _ body: (MPVPlayerEngine, OwlVideoView, NSWindow) async throws -> Void
+    ) async throws {
+        let engine = try makeEngine()
+        let sample = try makeSample(frameRate: frameRate, duration: duration, includesAudio: includesAudio)
+        let view = OwlVideoView(engine: engine)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 180),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        window.orderFront(nil)
+        view.setVideoRenderingEnabled(true)
+        defer {
+            view.detachRenderer()
+            engine.shutdown()
+            window.close()
+            try? FileManager.default.removeItem(at: sample)
+        }
+
+        view.display()
+        try await waitUntil { view.isRendererReady }
+        XCTAssertTrue(view.isRendererReady)
+        engine.load(sample)
+        try await waitUntil { view.renderedFrameCount >= 5 && engine.state.currentTime > 0 }
+        XCTAssertNil(engine.state.errorMessage)
+        XCTAssertGreaterThanOrEqual(view.renderedFrameCount, 5)
+        try await body(engine, view, window)
+    }
+
     func testLoadingAFileDeliversEventsThroughTheWakeupCallback() async throws {
         let engine = try makeEngine()
         let sample = try makeSample()
@@ -235,7 +344,12 @@ final class MPVPlayerEngineTests: XCTestCase {
         }
     }
 
-    private func makeSample(audioOnly: Bool = false) throws -> URL {
+    private func makeSample(
+        audioOnly: Bool = false,
+        frameRate: Int = 10,
+        duration: Int = 10,
+        includesAudio: Bool = false
+    ) throws -> URL {
         guard case .ffmpeg(let ffmpeg)? = ExternalThumbnailRenderer.locateTool() else {
             throw XCTSkip("ffmpeg is not installed in this environment.")
         }
@@ -244,7 +358,10 @@ final class MPVPlayerEngineTests: XCTestCase {
             .appendingPathExtension(audioOnly ? "m4a" : "mp4")
         let source = audioOnly
             ? ["-i", "sine=frequency=440"]
-            : ["-i", "testsrc=size=320x180:rate=10"]
+            : ["-i", "testsrc=size=320x180:rate=\(frameRate)"]
+        let audioInput = includesAudio && !audioOnly
+            ? ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
+            : []
         let codec = audioOnly
             ? ["-c:a", "aac"]
             : ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
@@ -255,9 +372,9 @@ final class MPVPlayerEngineTests: XCTestCase {
             "-hide_banner",
             "-loglevel", "error",
             "-f", "lavfi",
-        ] + source + [
-            "-t", "10",
-        ] + codec + [
+        ] + source + audioInput + [
+            "-t", String(duration),
+        ] + codec + (includesAudio && !audioOnly ? ["-c:a", "aac"] : []) + [
             url.path,
         ]
         process.standardError = FileHandle.nullDevice
