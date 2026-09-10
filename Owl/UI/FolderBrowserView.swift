@@ -46,6 +46,18 @@ struct FolderBrowserView: View {
         NavigationSplitView {
             sidebar
                 .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 300)
+                .toolbar {
+                    ToolbarItem(id: SidebarToolbarPlacement.addFolderID, placement: .navigation) {
+                        Button("Add Folder", systemImage: "folder.badge.plus", action: chooseFolders)
+                            .labelStyle(.iconOnly)
+                            .help("Add Folder")
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                }
+                .background {
+                    SidebarToolbarPlacement()
+                        .frame(width: 0, height: 0)
+                }
         } detail: {
             browserDetail
                 .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
@@ -61,21 +73,6 @@ struct FolderBrowserView: View {
 
                     ToolbarItem(placement: .primaryAction) {
                         playbackOptionsMenu
-                    }
-
-                    // Add Folder stays in the title bar whether or not the
-                    // sidebar is showing. A toolbar item that comes and goes
-                    // with the sidebar re-lays the title bar out the moment
-                    // the toggle is clicked, ahead of the split animation, so
-                    // the controls jump before anything slides.
-                    ToolbarSpacer(.fixed)
-
-                    ToolbarItem(placement: .primaryAction) {
-                        Button(action: chooseFolders) {
-                            Image(systemName: "folder.badge.plus")
-                        }
-                        .help("Add Folder")
-                        .accessibilityLabel("Add Folder")
                     }
                 }
                 // The toolbar is drawn in the title bar, above the content, so
@@ -229,14 +226,15 @@ struct FolderBrowserView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    /// How far into the window the window buttons and the sidebar toggle reach.
-    private static let titleBarControlsWidth: CGFloat = 156
+    /// Room for the window buttons, Add Folder, and the sidebar toggle when
+    /// the sidebar is collapsed.
+    private static let titleBarControlsWidth: CGFloat = 196
 
     /// How much of the trailing title bar strip the layout picker, playback
-    /// options menu, and Add Folder button take up. The header runs up under
+    /// options menu take up. The header runs up under
     /// the title bar, so the title has to stop short of these controls rather
     /// than truncate beneath them.
-    private static let toolbarControlsWidth: CGFloat = 206
+    private static let toolbarControlsWidth: CGFloat = 156
 
     private static let splitSpace = "BrowserSplit"
 
@@ -1116,6 +1114,96 @@ private struct EntryContextMenu: ViewModifier {
                 Divider()
                 Button("Move to Trash", role: .destructive) { moveToTrash(entry) }
             }
+        }
+    }
+}
+
+/// SwiftUI puts navigation items after the sidebar divider. Move the native
+/// item before the sidebar toggle so both controls share the sidebar toolbar,
+/// including AppKit's fullscreen title-bar presentation.
+private struct SidebarToolbarPlacement: NSViewRepresentable {
+    static let addFolderID = "Owl.AddFolder"
+
+    func makeNSView(context: Context) -> PlacementView {
+        PlacementView()
+    }
+
+    func updateNSView(_ view: PlacementView, context: Context) {
+        view.schedulePlacement()
+    }
+
+    final class PlacementView: NSView {
+        private var placementScheduled = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            NotificationCenter.default.removeObserver(self)
+            guard window != nil else { return }
+            // Observe item changes as SwiftUI rebuilds the toolbar. Filter by
+            // the current window at delivery time, since its toolbar can change.
+            for name in [NSToolbar.willAddItemNotification, NSToolbar.didRemoveItemNotification] {
+                NotificationCenter.default.addObserver(
+                    self, selector: #selector(toolbarChanged(_:)), name: name, object: nil
+                )
+            }
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(windowUpdated),
+                name: NSWindow.didUpdateNotification, object: window
+            )
+            schedulePlacement()
+        }
+
+        @objc private func windowUpdated() {
+            // SwiftUI can reset item properties without replacing the item
+            // when the sidebar collapses or the window changes presentation.
+            schedulePlacement()
+        }
+
+        @objc private func toolbarChanged(_ notification: Notification) {
+            guard let toolbar = notification.object as? NSToolbar,
+                  toolbar === window?.toolbar else { return }
+            schedulePlacement()
+        }
+
+        func schedulePlacement() {
+            guard !placementScheduled else { return }
+            placementScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.placementScheduled = false
+                self.placeAddFolder()
+            }
+        }
+
+        private func placeAddFolder() {
+            guard let toolbar = window?.toolbar,
+                  let addIndex = toolbar.items.firstIndex(where: {
+                      $0.itemIdentifier.rawValue == SidebarToolbarPlacement.addFolderID
+                  }) else { return }
+
+            // Navigation items are positioned in the detail column regardless
+            // of their array order. Let the sidebar tracking separator determine
+            // this item's position instead.
+            let item = toolbar.items[addIndex]
+            if item.isNavigational {
+                item.isNavigational = false
+            }
+
+            guard let toggleIndex = toolbar.items.firstIndex(where: Self.isSidebarToggle),
+                  addIndex + 1 != toggleIndex else { return }
+            toolbar.removeItem(at: addIndex)
+            guard let newToggleIndex = toolbar.items.firstIndex(where: Self.isSidebarToggle) else { return }
+            toolbar.insertItem(withItemIdentifier: item.itemIdentifier, at: newToggleIndex)
+            toolbar.items.first(where: { $0.itemIdentifier == item.itemIdentifier })?.isNavigational = false
+        }
+
+        private static func isSidebarToggle(_ item: NSToolbarItem) -> Bool {
+            item.itemIdentifier == .toggleSidebar ||
+                item.itemIdentifier.rawValue == "com.apple.SwiftUI.navigationSplitView.toggleSidebar"
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
         }
     }
 }
