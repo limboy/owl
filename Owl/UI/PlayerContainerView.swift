@@ -36,7 +36,6 @@ struct PlayerContainerView: View {
     @State private var errorDismissTask: Task<Void, Never>?
     @State private var subtitleNoticeVisible = false
     @State private var subtitleNoticeDismissTask: Task<Void, Never>?
-    @State private var isDropTargeted = false
 
     /// How many menus are open over the picture.
     ///
@@ -211,23 +210,11 @@ struct PlayerContainerView: View {
         }
         // A subtitle file is dropped on the picture far more readily than it is
         // found through an open panel, and the picture is the only part of the
-        // window still on screen once the player is up.
+        // window still on screen once the player is up. The drag cursor's copy
+        // badge is the whole affordance here: a border and a tint would sit
+        // over the very picture the drop is aimed at.
         .dropDestination(for: URL.self) { urls, _ in
             accept(urls)
-        } isTargeted: { targeted in
-            withAnimation(.easeOut(duration: 0.15)) {
-                isDropTargeted = targeted
-            }
-        }
-        .overlay {
-            if isDropTargeted {
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [9, 6]))
-                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-                    .padding(10)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-            }
         }
         .background {
             PlayerKeyboardMonitor(handle: handle)

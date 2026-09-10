@@ -20,7 +20,6 @@ struct FolderBrowserView: View {
     /// that moves that often; whether there is a video at all changes twice.
     private let hasMedia: Bool
     @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
-    @State private var isDropTargeted = false
     @State private var destination: BrowserDestination?
     @State private var didRestoreLocation = false
     @State private var pendingRootSelectionID: UUID?
@@ -84,22 +83,11 @@ struct FolderBrowserView: View {
         .navigationSplitViewStyle(.balanced)
         .coordinateSpace(.named(Self.splitSpace))
         .background(Color(nsColor: .windowBackgroundColor))
-        .overlay {
-            if isDropTargeted {
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [9, 6]))
-                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-                    .padding(10)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-            }
-        }
+        // The drag cursor's copy badge is the whole affordance: a border and a
+        // tint across the window said no more than the badge already does, and
+        // washed out the library underneath while they were up.
         .dropDestination(for: URL.self) { urls, _ in
             accept(urls)
-        } isTargeted: { targeted in
-            withAnimation(.easeOut(duration: 0.15)) {
-                isDropTargeted = targeted
-            }
         }
         .alert(
             "Owl Couldn’t Complete That Action",
