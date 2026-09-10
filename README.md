@@ -27,6 +27,13 @@ library and playback progress over, move
   or a drop on the browser, leaving the folder window's queue untouched.
 - Playback progress kept per file and shared by every window, so a part-watched
   video resumes on the frame it left off at.
+- Continue Watching in the sidebar gathers unfinished videos played from folders.
+  Resume with one click, start over, mark watched, or
+  remove an item without losing its progress; removals and watched changes can
+  be undone. Offline files stay in the list until their disk is reconnected.
+- File ▸ Open Recent remembers files opened in standalone windows, using the
+  macOS recent-document list. Reopen them in their own windows or clear the menu
+  without removing saved playback progress.
 - Timeline scrubbing with hover frame previews for every playable format,
   shaped like the video they preview — AVFoundation where it can read the file,
   bundled `ffmpeg` or `mpv` for the containers it cannot, such as MKV, AVI,
@@ -155,6 +162,17 @@ open "build/Build/Products/Release/Owl.app"
 
 ## Usage
 
+- Choose Continue Watching in the sidebar to pick up an unfinished folder video. Videos
+  appear after at least 30 seconds, provided they are not marked watched and
+  have more than 30 seconds left. The browser remembers the last page and
+  nested folder visited. The first visit with no saved page opens Continue
+  Watching when there is something to resume.
+- Continue Watching uses the original folder's video order for Next and Previous,
+  not the other items in viewing history. Files opened on their own appear in
+  File ▸ Open Recent instead, and reopen in standalone windows. Older progress
+  records without a saved playback source are imported into Open Recent once.
+  Returning from playback keeps cards in place;
+  revisiting the page sorts them by most recently watched again.
 - Add one or more folders with the `+` (`Add Folder`) button in the browser
   header, or drag them into the lower browser.
 - Use File ▸ Open File… to watch a single file. It opens in a window of its

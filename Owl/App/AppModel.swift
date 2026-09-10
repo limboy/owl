@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var progressRevision = 0
 
     private var queueDirectory: URL?
+    private var followsBrowserQueue = true
     private var cancellables = Set<AnyCancellable>()
 
     /// A file asked for before there was anything to draw it with.
@@ -59,7 +60,7 @@ final class AppModel: ObservableObject {
         self.subtitleStore = subtitleStore
 
         folderLibrary?.onVisibleVideosChanged = { [weak self] directory, videos in
-            guard let self else { return }
+            guard let self, self.followsBrowserQueue else { return }
             guard let directory else {
                 self.closeVideo()
                 return
@@ -127,13 +128,18 @@ final class AppModel: ObservableObject {
         engine = nil
     }
 
-    func play(_ url: URL, from videos: [URL], directory: URL?) {
+    func play(
+        _ url: URL, from videos: [URL], directory: URL?,
+        fromBeginning: Bool = false, followsBrowserQueue: Bool = true
+    ) {
         guard engine != nil else { return }
         saveCurrentProgress()
         queueDirectory = directory
+        self.followsBrowserQueue = followsBrowserQueue
+        progressStore.setQueueDirectory(directory, for: url)
         folderLibrary?.selectVideo(url)
         playbackQueue.select(url, from: videos)
-        loadVideo(url)
+        loadVideo(url, fromBeginning: fromBeginning)
     }
 
     func playNext() {
@@ -372,13 +378,14 @@ final class AppModel: ObservableObject {
         loadVideo(next)
     }
 
-    private func loadVideo(_ url: URL) {
+    private func loadVideo(_ url: URL, fromBeginning: Bool = false) {
         // Opening a file is what makes this window the one being watched, and
         // so the one the media keys and the Now Playing panel belong to.
         NowPlayingCenter.shared.activate(self)
         videoView?.setVideoRenderingEnabled(true)
 
-        let startAt = resumePosition(for: url)
+        progressStore.setHiddenFromContinueWatching(false, url: url)
+        let startAt = fromBeginning ? 0 : resumePosition(for: url)
         guard videoView?.isRendererReady == true else {
             pendingLoad = (url, startAt)
             // The file is what the window is showing from this moment, even
@@ -499,13 +506,15 @@ final class AppModel: ObservableObject {
     }
 
     private func saveCurrentProgress() {
-        guard let url = playerState.currentURL,
+        guard !playerState.isLoading, playerState.duration > 0,
+              let url = playerState.currentURL,
               playerState.currentTime >= 0
         else { return }
         progressStore.record(
             url: url,
             position: playerState.currentTime,
-            duration: playerState.duration
+            duration: playerState.duration,
+            queueDirectory: queueDirectory
         )
     }
 

@@ -21,7 +21,8 @@ struct FolderBrowserView: View {
     private let hasMedia: Bool
     @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
     @State private var isDropTargeted = false
-    @State private var selectedRootID: UUID?
+    @State private var destination: BrowserDestination?
+    @State private var didRestoreLocation = false
     @State private var pendingRootSelectionID: UUID?
     @FocusState private var isSidebarFocused: Bool
     @State private var headerOriginX: CGFloat = 0
@@ -115,6 +116,8 @@ struct FolderBrowserView: View {
             Text(library.errorMessage ?? "")
         }
         .onAppear(perform: synchronizeSelection)
+        .onChange(of: destination) { _, _ in rememberLocation() }
+        .onChange(of: library.navigationPath) { _, _ in rememberLocation() }
         .onChange(of: library.roots) { _, _ in
             synchronizeSelection()
         }
@@ -125,16 +128,27 @@ struct FolderBrowserView: View {
         nonmutating set { storedLayout = newValue.rawValue }
     }
 
-    private var sidebar: some View {
-        VStack(spacing: 0) {
-            Text("Folders")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .frame(height: 24, alignment: .bottom)
+    private var showsContinueWatching: Bool { destination == .continueWatching }
 
-            List(selection: $selectedRootID) {
+    private var selectedRootID: UUID? {
+        get {
+            if case .folder(let id) = destination { return id }
+            return nil
+        }
+        nonmutating set { destination = newValue.map(BrowserDestination.folder) }
+    }
+
+    private func rememberLocation() {
+        guard didRestoreLocation, let destination else { return }
+        BrowserLocation(destination: destination, path: library.navigationPath).save()
+    }
+
+    private var sidebar: some View {
+        List(selection: $destination) {
+            Label("Continue Watching", systemImage: "play.circle")
+                .tag(BrowserDestination.continueWatching)
+
+            Section("Folders") {
                 ForEach(library.roots) { root in
                     Label {
                         Text(root.displayName)
@@ -143,7 +157,7 @@ struct FolderBrowserView: View {
                         Image(systemName: root.isAvailable ? "folder" : "folder.badge.questionmark")
                             .symbolRenderingMode(.hierarchical)
                     }
-                    .tag(root.id)
+                    .tag(BrowserDestination.folder(root.id))
                     .contextMenu {
                         if root.isAvailable {
                             Button("Show in Finder") { showInFinder(root) }
@@ -157,15 +171,15 @@ struct FolderBrowserView: View {
                     }
                 }
             }
-            .listStyle(.sidebar)
-            .contentMargins(.top, 0, for: .scrollContent)
-            .focused($isSidebarFocused)
-            .onChange(of: selectedRootID) { _, rootID in
-                guard let rootID,
-                      let root = library.roots.first(where: { $0.id == rootID })
-                else { return }
-                navigate(to: root)
-            }
+        }
+        .listStyle(.sidebar)
+        .contentMargins(.top, 0, for: .scrollContent)
+        .focused($isSidebarFocused)
+        .onChange(of: destination) { _, value in
+            guard case .folder(let rootID) = value,
+                  let root = library.roots.first(where: { $0.id == rootID })
+            else { return }
+            navigate(to: root)
         }
     }
 
@@ -187,7 +201,14 @@ struct FolderBrowserView: View {
             ZStack {
                 Color(nsColor: .windowBackgroundColor)
 
-                if library.roots.isEmpty {
+                if showsContinueWatching {
+                    ContinueWatchingView(
+                        appModel: appModel,
+                        isGrid: layout == .grid,
+                        hasMedia: hasMedia,
+                        usesOnlineMetadata: library.isMetadataSyncEnabled
+                    )
+                } else if library.roots.isEmpty {
                     noFoldersState
                 } else if let selectedRoot, !selectedRoot.isAvailable {
                     unavailableState(selectedRoot)
@@ -236,7 +257,7 @@ struct FolderBrowserView: View {
 
     private var contentHeader: some View {
         HStack(spacing: 10) {
-            if library.navigationPath.count > 1 {
+            if !showsContinueWatching, library.navigationPath.count > 1 {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         library.goBack()
@@ -325,6 +346,7 @@ struct FolderBrowserView: View {
     }
 
     private var detailTitle: String {
+        if showsContinueWatching { return "Continue Watching" }
         guard selectedRoot != nil else { return "Library" }
         return library.currentTitle
     }
@@ -496,6 +518,26 @@ struct FolderBrowserView: View {
             return
         }
 
+        if !didRestoreLocation {
+            didRestoreLocation = true
+            if let location = BrowserLocation.load() {
+                destination = location.destination
+                if case .folder(let id) = location.destination,
+                   let root = library.roots.first(where: { $0.id == id }), root.isAvailable {
+                    library.openRoot(root)
+                    for folder in location.path.dropFirst() {
+                        guard folder.deletingLastPathComponent().standardizedFileURL
+                            == library.currentDirectory?.standardizedFileURL else { break }
+                        library.openFolder(folder)
+                    }
+                }
+            } else if !appModel.progressStore.continueWatching.isEmpty {
+                destination = .continueWatching
+            }
+        }
+
+        if showsContinueWatching { return }
+
         if let pathRoot = library.navigationPath.first,
            let root = library.roots.first(where: {
                $0.url.standardizedFileURL == pathRoot.standardizedFileURL
@@ -611,12 +653,12 @@ struct FolderBrowserView: View {
     }
 }
 
-private enum CoverSource: Hashable {
+enum CoverSource: Hashable {
     case folder(URL)
     case video(URL)
 }
 
-private struct LibraryGridButton: View {
+struct LibraryGridButton: View {
     let title: String
     let subtitle: String
     let source: CoverSource
@@ -702,7 +744,7 @@ private struct LibraryGridButton: View {
     }
 }
 
-private struct LibraryListButton: View {
+struct LibraryListButton: View {
     let title: String
     let subtitle: String?
     let source: CoverSource
@@ -719,6 +761,7 @@ private struct LibraryListButton: View {
     let isEnabled: Bool
     let onToggleWatched: (() -> Void)?
     let action: () -> Void
+    var showsDisclosure = true
 
     /// Where the artwork sits inside the row, and whether the pointer is in it.
     ///
@@ -793,11 +836,13 @@ private struct LibraryListButton: View {
                 
                 Spacer()
 
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 18)
-                    .layoutPriority(1)
+                if showsDisclosure {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 18)
+                        .layoutPriority(1)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)

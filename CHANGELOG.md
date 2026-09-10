@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Add Continue Watching to the sidebar, with unfinished videos played from folders, one-click resume, grid and list layouts, and offline-file indicators
+- Add File → Open Recent for standalone videos, reopening them in their own windows, with Clear Menu and preserved playback progress
+- Add Play from Beginning, Mark as Watched, and Remove from Continue Watching actions, with undo for watched changes and removal while retaining playback progress
+- Remember the browser's last page and nested folder, and keep the original folder's playback queue when resuming a video
+- Preserve saved progress when a video is still loading or has no valid duration
+- Keep the player’s slide-in animation responsive by attaching the video surface after the animation finishes, and avoid a crash when a detached OpenGL view is asked to draw
+
 ## [1.2.8] - 2026-09-07
 - Keep the picture smooth by drawing video on its own worker, so a stalled frame no longer holds up playback
 

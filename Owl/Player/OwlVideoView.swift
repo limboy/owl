@@ -304,8 +304,9 @@ final class OwlVideoView: NSOpenGLView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard isRendererReady, openGLContext != nil else {
-            NSColor.black.setFill()
-            dirtyRect.fill()
+            // A layer-backed NSOpenGLView calls draw without a Quartz graphics
+            // context. Filling dirtyRect here can crash during teardown; the
+            // surrounding player supplies the black loading background.
             return
         }
 

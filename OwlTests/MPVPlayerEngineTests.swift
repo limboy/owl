@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import SwiftUI
 import XCTest
 @testable import Owl
 
@@ -10,6 +11,65 @@ import XCTest
 /// mpv. Only an actual player exercises that ordering.
 @MainActor
 final class MPVPlayerEngineTests: XCTestCase {
+    func testFirstPlayerPresentationKeepsTheMainRunLoopResponsive() async throws {
+        let sample = try makeSample(frameRate: 24, duration: 10, includesAudio: true)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("OwlPresentation-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let library = FolderLibrary(storageURL: directory.appendingPathComponent("library.json"), startWatching: false)
+        let model = AppModel(
+            folderLibrary: library,
+            progressStore: PlaybackProgressStore(storageURL: directory.appendingPathComponent("progress.json"))
+        )
+        let view = try XCTUnwrap(model.videoView)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 600),
+            styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: ContentView(appModel: model, library: library))
+        window.orderFront(nil)
+        defer {
+            model.shutdown()
+            window.close()
+            model.progressStore.waitForPendingWrites()
+            try? FileManager.default.removeItem(at: sample)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        for presentation in 1...2 {
+            let clock = ContinuousClock()
+            let start = clock.now
+            var previous = start
+            var longestGap: Duration = .zero
+            let framesBefore = view.renderedFrameCount
+            model.play(sample, from: [sample], directory: sample.deletingLastPathComponent())
+            while clock.now - start < .seconds(2) {
+                try await Task.sleep(for: .milliseconds(16))
+                let now = clock.now
+                longestGap = max(longestGap, now - previous)
+                previous = now
+            }
+            print("Player presentation \(presentation): longest main-run-loop gap \(longestGap)")
+            XCTAssertLessThan(longestGap, .milliseconds(150))
+            try await waitUntil { view.renderedFrameCount > framesBefore }
+            XCTAssertGreaterThan(view.renderedFrameCount, framesBefore)
+            XCTAssertNil(model.playerState.errorMessage)
+            model.closeVideo()
+            try await waitUntil { view.superview == nil }
+            XCTAssertNil(view.superview)
+        }
+
+        // A cancelled insertion must not mount the surface from a stale
+        // animation completion or start playing again after it was closed.
+        model.play(sample, from: [sample], directory: sample.deletingLastPathComponent())
+        try await Task.sleep(for: .milliseconds(70))
+        XCTAssertNil(view.superview, "the moving shell should not contain a live OpenGL view")
+        model.closeVideo()
+        try await Task.sleep(for: .milliseconds(800))
+        XCTAssertNil(view.superview)
+        XCTAssertFalse(model.playerState.hasMedia)
+    }
+
     func testVideoKeepsRenderingWhileTheMainThreadIsBusy() async throws {
         try await withVideoSurface { _, view, _ in
             let before = view.renderedFrameCount

@@ -32,6 +32,8 @@ final class FilePlayerWindows {
 
     func open(_ rawURL: URL) {
         let url = rawURL.standardizedFileURL
+        RecentFiles.shared.record(url)
+        PlaybackProgressStore.shared.setQueueDirectory(nil, for: url)
         if let existing = controllers[url] {
             existing.show()
             return

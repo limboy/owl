@@ -113,12 +113,30 @@ struct CheckForUpdatesView: View {
 /// ever one of it; a second copy would show the same picture in neither window.
 /// Opening a file is what the second window is for.
 struct FileCommands: Commands {
+    @ObservedObject private var recentFiles = RecentFiles.shared
+
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button("Open File…") {
                 FilePlayerWindows.shared.chooseFile()
             }
             .keyboardShortcut("o")
+
+            Menu("Open Recent") {
+                if recentFiles.urls.isEmpty {
+                    Text("No Recent Files")
+                } else {
+                    ForEach(recentFiles.urls, id: \.self) { url in
+                        Button(recentFiles.title(for: url)) {
+                            FilePlayerWindows.shared.open(url)
+                        }
+                        .help(url.path)
+                    }
+                }
+                Divider()
+                Button("Clear Menu") { recentFiles.clear() }
+                    .disabled(recentFiles.urls.isEmpty)
+            }
         }
     }
 }

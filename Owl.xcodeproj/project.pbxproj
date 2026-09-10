@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0003AF8949ED1256C3A43291 /* ExternalThumbnailRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED791579A595AB920BF3B4C3 /* ExternalThumbnailRendererTests.swift */; };
 		0282E16B4B8649D6470D201F /* NowPlayingRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1125A8BA6898A644DB4E704 /* NowPlayingRoutingTests.swift */; };
+		08D41624CBE7B6F3B7233E80 /* RecentFilesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01ADE4BFA5EA9A7DDB690A9 /* RecentFilesTests.swift */; };
 		0B4249BE7FF887DA892E6660 /* DeferredVideoLoadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4A9FDB62392BD0AD14F244 /* DeferredVideoLoadTests.swift */; };
 		0B55DEFEE779D30558AB43A4 /* OpenPanelPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD049F9D499797C934F77DAF /* OpenPanelPresentation.swift */; };
 		0F0CEB4FB74A2EAE50E89AE0 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = C86CBBC09AD4A7409E406990 /* Sparkle */; };
@@ -60,9 +61,12 @@
 		AFCEF0E501D3843D9A76BA10 /* FilePlayerWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85C54626E6A0F02EAB11B481 /* FilePlayerWindows.swift */; };
 		B8067B9A7330CA0123660A63 /* SubtitleFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29BADA9E1532096C38BA0569 /* SubtitleFile.swift */; };
 		BA33FD9D3E71A5B4BCB0EC6B /* PlaybackQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F4E79E721FB5FC7B15A2708 /* PlaybackQueueTests.swift */; };
+		BA65853787ED011440B89DC6 /* RecentFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1F4FE619406A86E3AC55773 /* RecentFiles.swift */; };
 		C02A6D3379C8FBFA5A52D7B6 /* MediaThumbnailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE47C887D3498C5E61DFE7DC /* MediaThumbnailProvider.swift */; };
 		C0AA28E4D823547433204413 /* LibMPVSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 934ADE9C5CEA91221C7B1377 /* LibMPVSetupView.swift */; };
+		C5F70562A044BAA66AC9F68F /* ContinueWatchingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0DF4AA542114CF853F292E /* ContinueWatchingView.swift */; };
 		CD1C5399F7C9994C2AE5A02F /* SubtitleStateStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F195FD1A2AEB0CAFAD57571 /* SubtitleStateStoreTests.swift */; };
+		CE983BFE56F9F60CD2945420 /* ContinueWatching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 285E7ACDF86D6B012882B63B /* ContinueWatching.swift */; };
 		CFF9DEBF454481CC1533A1DB /* OwlApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95B350A1FE624197E2AA32B0 /* OwlApp.swift */; };
 		D0FB6ED6FC3CD7335EF99E97 /* TimelinePreviewScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53C32D670BE52750EF7D188B /* TimelinePreviewScrubber.swift */; };
 		D37A917110D804F2977D2DE5 /* PlayerStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40633D16992B312A728DCD19 /* PlayerStateTests.swift */; };
@@ -80,6 +84,7 @@
 		EEC0443D998D0150E33F04B3 /* SubtitleSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C66B4B759FC44D203FB9F5F9 /* SubtitleSelectionTests.swift */; };
 		EF9A1A3765574525227002CB /* ActivePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42493D4355E2786D1631F7E6 /* ActivePlayer.swift */; };
 		F41673A067E6E9693504559E /* PlayerKeyboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E9A82848C0D9F83D3630766 /* PlayerKeyboardMonitor.swift */; };
+		F53F42C58A35B5B36789B099 /* ContinueWatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97E707A83EDC9CFC079DB98 /* ContinueWatchingTests.swift */; };
 		FCA100535EB69CB1750595DA /* ExternalThumbnailRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4970997FBFC0773D78E00155 /* ExternalThumbnailRenderer.swift */; };
 /* End PBXBuildFile section */
 
@@ -142,6 +147,7 @@
 		2172AA878A892270B4DAD4DE /* NowPlayingCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingCenter.swift; sourceTree = "<group>"; };
 		251460B3A030FC4F10DFA90F /* SubtitleSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSelection.swift; sourceTree = "<group>"; };
 		27578999F49A171B6A85C2FF /* PlayerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerState.swift; sourceTree = "<group>"; };
+		285E7ACDF86D6B012882B63B /* ContinueWatching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueWatching.swift; sourceTree = "<group>"; };
 		29BADA9E1532096C38BA0569 /* SubtitleFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleFile.swift; sourceTree = "<group>"; };
 		2AD9C30DD296E1E842395C5D /* PlaybackProgressStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackProgressStoreTests.swift; sourceTree = "<group>"; };
 		350EF09239D82DE2A970AE95 /* owl.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = owl.icon; sourceTree = "<group>"; };
@@ -156,6 +162,7 @@
 		4621E1B4E6785A0FE5112F63 /* MediaMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaMetadata.swift; sourceTree = "<group>"; };
 		470EC57BEEF32A6E969AFC04 /* OwlTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OwlTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4970997FBFC0773D78E00155 /* ExternalThumbnailRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalThumbnailRenderer.swift; sourceTree = "<group>"; };
+		4A0DF4AA542114CF853F292E /* ContinueWatchingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueWatchingView.swift; sourceTree = "<group>"; };
 		521442101CFC2609B330FADD /* FolderBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderBrowserView.swift; sourceTree = "<group>"; };
 		53B4FFFA39F2DDEE28712765 /* PlayerKeyRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerKeyRoutingTests.swift; sourceTree = "<group>"; };
 		53C32D670BE52750EF7D188B /* TimelinePreviewScrubber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelinePreviewScrubber.swift; sourceTree = "<group>"; };
@@ -182,6 +189,7 @@
 		9A5D9C07D47E8C0B08085A26 /* OnlineMetadataServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnlineMetadataServiceTests.swift; sourceTree = "<group>"; };
 		9E4A9FDB62392BD0AD14F244 /* DeferredVideoLoadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeferredVideoLoadTests.swift; sourceTree = "<group>"; };
 		9F7898135892A57BD233B87E /* OnlineArtwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnlineArtwork.swift; sourceTree = "<group>"; };
+		A1F4FE619406A86E3AC55773 /* RecentFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFiles.swift; sourceTree = "<group>"; };
 		A80EB50BD7D043D1A725AC90 /* ExternalMediaProbeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalMediaProbeTests.swift; sourceTree = "<group>"; };
 		AD5BE4F204397A6E90FE180A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		AEC6D1EE448FF490E72492E2 /* CoverImageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverImageCache.swift; sourceTree = "<group>"; };
@@ -190,6 +198,7 @@
 		BB0D9DCB9D710E27DC8929AB /* SubtitlePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitlePreference.swift; sourceTree = "<group>"; };
 		BDA1F1304BD67FEF2F43DB03 /* WindowTitleHidden.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowTitleHidden.swift; sourceTree = "<group>"; };
 		BDB00DF8F6F5E1F694F001F8 /* VideoTitleGuess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTitleGuess.swift; sourceTree = "<group>"; };
+		C01ADE4BFA5EA9A7DDB690A9 /* RecentFilesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFilesTests.swift; sourceTree = "<group>"; };
 		C30A33BD5231EF485304BABC /* ExternalMediaProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalMediaProbe.swift; sourceTree = "<group>"; };
 		C66B4B759FC44D203FB9F5F9 /* SubtitleSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSelectionTests.swift; sourceTree = "<group>"; };
 		C69E2716A6927AAE5AB0FC30 /* MPVPlayerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MPVPlayerEngine.swift; sourceTree = "<group>"; };
@@ -205,6 +214,7 @@
 		DDD55B69E99761BC490581E9 /* FilePlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePlayerView.swift; sourceTree = "<group>"; };
 		E0F9CC47229CAEE965A61E2A /* ThumbnailFilmstrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailFilmstrip.swift; sourceTree = "<group>"; };
 		E1125A8BA6898A644DB4E704 /* NowPlayingRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingRoutingTests.swift; sourceTree = "<group>"; };
+		E97E707A83EDC9CFC079DB98 /* ContinueWatchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueWatchingTests.swift; sourceTree = "<group>"; };
 		ED791579A595AB920BF3B4C3 /* ExternalThumbnailRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalThumbnailRendererTests.swift; sourceTree = "<group>"; };
 		F2455E5B0FECA444DF8EE03F /* VideoTitleGuessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTitleGuessTests.swift; sourceTree = "<group>"; };
 		F7156E287E501A185C1F371F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -254,6 +264,7 @@
 		35D7660818D85EC9F58BF570 /* Library */ = {
 			isa = PBXGroup;
 			children = (
+				285E7ACDF86D6B012882B63B /* ContinueWatching.swift */,
 				AEC6D1EE448FF490E72492E2 /* CoverImageCache.swift */,
 				C30A33BD5231EF485304BABC /* ExternalMediaProbe.swift */,
 				3A45CF271BF51DEF146E472C /* ExternalProcess.swift */,
@@ -290,6 +301,7 @@
 		4EBA361E4EE12D2223230EB0 /* OwlTests */ = {
 			isa = PBXGroup;
 			children = (
+				E97E707A83EDC9CFC079DB98 /* ContinueWatchingTests.swift */,
 				43CD0D8CDDEB6F8DC88C5BE3 /* CoverImageCacheTests.swift */,
 				9E4A9FDB62392BD0AD14F244 /* DeferredVideoLoadTests.swift */,
 				A80EB50BD7D043D1A725AC90 /* ExternalMediaProbeTests.swift */,
@@ -306,6 +318,7 @@
 				093418A852F12FF5F2C2A376 /* PlaybackSleepPreventionTests.swift */,
 				53B4FFFA39F2DDEE28712765 /* PlayerKeyRoutingTests.swift */,
 				40633D16992B312A728DCD19 /* PlayerStateTests.swift */,
+				C01ADE4BFA5EA9A7DDB690A9 /* RecentFilesTests.swift */,
 				C66B4B759FC44D203FB9F5F9 /* SubtitleSelectionTests.swift */,
 				5F195FD1A2AEB0CAFAD57571 /* SubtitleStateStoreTests.swift */,
 				1967C4A2291A70E00B0BCEF5 /* ThumbnailFilmstripTests.swift */,
@@ -330,6 +343,7 @@
 			isa = PBXGroup;
 			children = (
 				AD5BE4F204397A6E90FE180A /* ContentView.swift */,
+				4A0DF4AA542114CF853F292E /* ContinueWatchingView.swift */,
 				DDD55B69E99761BC490581E9 /* FilePlayerView.swift */,
 				521442101CFC2609B330FADD /* FolderBrowserView.swift */,
 				84337DE90BFA1B9260252216 /* FullScreenTransition.swift */,
@@ -390,6 +404,7 @@
 				85C54626E6A0F02EAB11B481 /* FilePlayerWindows.swift */,
 				2172AA878A892270B4DAD4DE /* NowPlayingCenter.swift */,
 				95B350A1FE624197E2AA32B0 /* OwlApp.swift */,
+				A1F4FE619406A86E3AC55773 /* RecentFiles.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -549,6 +564,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F53F42C58A35B5B36789B099 /* ContinueWatchingTests.swift in Sources */,
 				5C7C757A40A2655166A5D942 /* CoverImageCacheTests.swift in Sources */,
 				0B4249BE7FF887DA892E6660 /* DeferredVideoLoadTests.swift in Sources */,
 				87585A2B720D8EFFB0CC3D37 /* ExternalMediaProbeTests.swift in Sources */,
@@ -565,6 +581,7 @@
 				3794109AEE0FD8A669674436 /* PlaybackSleepPreventionTests.swift in Sources */,
 				154F47E287B4363ECFC3499F /* PlayerKeyRoutingTests.swift in Sources */,
 				D37A917110D804F2977D2DE5 /* PlayerStateTests.swift in Sources */,
+				08D41624CBE7B6F3B7233E80 /* RecentFilesTests.swift in Sources */,
 				EEC0443D998D0150E33F04B3 /* SubtitleSelectionTests.swift in Sources */,
 				CD1C5399F7C9994C2AE5A02F /* SubtitleStateStoreTests.swift in Sources */,
 				5FDDA5BDA0C46D818DAFD6CF /* TMDBClientTests.swift in Sources */,
@@ -581,6 +598,8 @@
 				EF9A1A3765574525227002CB /* ActivePlayer.swift in Sources */,
 				98E8F19BAC5C9AF9CA6DC9E3 /* AppModel.swift in Sources */,
 				8FAC2C7638AD8EBCA9D148CB /* ContentView.swift in Sources */,
+				CE983BFE56F9F60CD2945420 /* ContinueWatching.swift in Sources */,
+				C5F70562A044BAA66AC9F68F /* ContinueWatchingView.swift in Sources */,
 				645DD877C6910C1215640073 /* CoverImageCache.swift in Sources */,
 				E770198A243E7BFC0E08E2BD /* ExternalMediaProbe.swift in Sources */,
 				1B75F9576440638DA950DEDE /* ExternalProcess.swift in Sources */,
@@ -609,6 +628,7 @@
 				7B4D8B780F0E31AAE65F195B /* PlayerContainerView.swift in Sources */,
 				F41673A067E6E9693504559E /* PlayerKeyboardMonitor.swift in Sources */,
 				4258ABB81C9695D807D8C38F /* PlayerState.swift in Sources */,
+				BA65853787ED011440B89DC6 /* RecentFiles.swift in Sources */,
 				B8067B9A7330CA0123660A63 /* SubtitleFile.swift in Sources */,
 				41695C50DA0B57E0F7C1589D /* SubtitleLanguage.swift in Sources */,
 				157464D8985821F6749440D8 /* SubtitleNotice.swift in Sources */,
@@ -867,7 +887,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.2.8;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ldl",
@@ -925,7 +945,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.2.8;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ldl",

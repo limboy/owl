@@ -18,6 +18,7 @@ struct PlayerContainerView: View {
     /// bar already carries the file's name and its icon, so a second copy of
     /// the name laid over the top of the video says nothing new.
     let showsTitle: Bool
+    let isVideoSurfaceActive: Bool
 
     /// Dismisses the current video, if this host has somewhere to dismiss it
     /// to. Hosts that pass nothing are shown no close button.
@@ -53,6 +54,7 @@ struct PlayerContainerView: View {
         videoView: OwlVideoView,
         showsQueueControls: Bool = true,
         showsTitle: Bool = true,
+        isVideoSurfaceActive: Bool = true,
         onClose: (@MainActor () -> Void)? = nil
     ) {
         self.appModel = appModel
@@ -60,6 +62,7 @@ struct PlayerContainerView: View {
         self.videoView = videoView
         self.showsQueueControls = showsQueueControls
         self.showsTitle = showsTitle
+        self.isVideoSurfaceActive = isVideoSurfaceActive
         self.onClose = onClose
         _state = ObservedObject(wrappedValue: appModel.playerState)
     }
@@ -68,7 +71,7 @@ struct PlayerContainerView: View {
         ZStack {
             Color.black
 
-            VideoSurface(view: videoView)
+            VideoSurface(view: videoView, isActive: isVideoSurfaceActive)
                 .contentShape(Rectangle())
 
             if !state.hasMedia {
