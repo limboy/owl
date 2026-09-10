@@ -30,6 +30,7 @@ struct OwlApp: App {
     #endif
 
     init() {
+        SidebarToolbarPlacement.beginClaimingSidebarPlacement()
         let library = FolderLibrary()
         self.library = library
         _appModel = StateObject(wrappedValue: AppModel(folderLibrary: library))

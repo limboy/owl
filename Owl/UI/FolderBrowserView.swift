@@ -1121,19 +1121,38 @@ private struct EntryContextMenu: ViewModifier {
 /// SwiftUI puts navigation items after the sidebar divider. Move the native
 /// item before the sidebar toggle so both controls share the sidebar toolbar,
 /// including AppKit's fullscreen title-bar presentation.
-private struct SidebarToolbarPlacement: NSViewRepresentable {
+struct SidebarToolbarPlacement: NSViewRepresentable {
     static let addFolderID = "Owl.AddFolder"
+
+    /// Start keeping the Add Folder item out of the detail column.
+    ///
+    /// SwiftUI marks the item as a navigation one while it builds the toolbar,
+    /// which happens before the toolbar reaches the window and well before the
+    /// view below has one of its own. Anything that waits for a window is a
+    /// pass too late: the button is drawn beside the title for the first frames
+    /// after launch and then hops into the sidebar. The app starts this at
+    /// launch instead, and the identifier is the app's own, so no window or
+    /// toolbar is needed to recognise the item.
+    @MainActor
+    static func beginClaimingSidebarPlacement() {
+        guard claim == nil else { return }
+        claim = SidebarClaim()
+    }
+
+    @MainActor
+    private static var claim: SidebarClaim?
 
     func makeNSView(context: Context) -> PlacementView {
         PlacementView()
     }
 
     func updateNSView(_ view: PlacementView, context: Context) {
-        view.schedulePlacement()
+        view.placeNow()
     }
 
     final class PlacementView: NSView {
         private var placementScheduled = false
+        private var isPlacing = false
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
@@ -1150,18 +1169,27 @@ private struct SidebarToolbarPlacement: NSViewRepresentable {
                 self, selector: #selector(windowUpdated),
                 name: NSWindow.didUpdateNotification, object: window
             )
-            schedulePlacement()
+            placeNow()
         }
 
         @objc private func windowUpdated() {
-            // SwiftUI can reset item properties without replacing the item
-            // when the sidebar collapses or the window changes presentation.
+            // SwiftUI can reorder the toolbar without replacing any item when
+            // the sidebar collapses or the window changes presentation.
             schedulePlacement()
         }
 
         @objc private func toolbarChanged(_ notification: Notification) {
             guard let toolbar = notification.object as? NSToolbar,
                   toolbar === window?.toolbar else { return }
+            schedulePlacement()
+        }
+
+        /// Order the item before the next time the title bar is drawn.
+        ///
+        /// The toolbar can still be filling in, so an async pass follows to
+        /// catch items that arrive after this one.
+        func placeNow() {
+            placeAddFolder()
             schedulePlacement()
         }
 
@@ -1176,25 +1204,24 @@ private struct SidebarToolbarPlacement: NSViewRepresentable {
         }
 
         private func placeAddFolder() {
+            // Removing and inserting posts the notifications this class listens
+            // for; don't re-enter part way through a move.
+            guard !isPlacing else { return }
             guard let toolbar = window?.toolbar,
                   let addIndex = toolbar.items.firstIndex(where: {
                       $0.itemIdentifier.rawValue == SidebarToolbarPlacement.addFolderID
                   }) else { return }
+            isPlacing = true
+            defer { isPlacing = false }
 
-            // Navigation items are positioned in the detail column regardless
-            // of their array order. Let the sidebar tracking separator determine
-            // this item's position instead.
+            // Sit next to the sidebar toggle, on the sidebar's side of the
+            // tracking separator.
             let item = toolbar.items[addIndex]
-            if item.isNavigational {
-                item.isNavigational = false
-            }
-
             guard let toggleIndex = toolbar.items.firstIndex(where: Self.isSidebarToggle),
                   addIndex + 1 != toggleIndex else { return }
             toolbar.removeItem(at: addIndex)
             guard let newToggleIndex = toolbar.items.firstIndex(where: Self.isSidebarToggle) else { return }
             toolbar.insertItem(withItemIdentifier: item.itemIdentifier, at: newToggleIndex)
-            toolbar.items.first(where: { $0.itemIdentifier == item.itemIdentifier })?.isNavigational = false
         }
 
         private static func isSidebarToggle(_ item: NSToolbarItem) -> Bool {
@@ -1205,5 +1232,68 @@ private struct SidebarToolbarPlacement: NSViewRepresentable {
         deinit {
             NotificationCenter.default.removeObserver(self)
         }
+    }
+}
+
+/// Clears `isNavigational` on the Add Folder item as often as SwiftUI sets it.
+///
+/// A navigation item is drawn in the detail column whatever its place in the
+/// toolbar, and SwiftUI sets the flag twice: once as the item goes in, and
+/// again on the update pass that precedes the window's first frame. Watching
+/// the property answers both the moment they happen, which is what keeps the
+/// button from ever being drawn beside the title.
+@MainActor
+private final class SidebarClaim: NSObject {
+    private static let navigationalKey = "navigational"
+
+    private var claimed: [NSToolbarItem] = []
+    private var isClearing = false
+
+    override init() {
+        super.init()
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(willAddItem(_:)),
+            name: NSToolbar.willAddItemNotification, object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(didRemoveItem(_:)),
+            name: NSToolbar.didRemoveItemNotification, object: nil
+        )
+    }
+
+    @objc private func willAddItem(_ notification: Notification) {
+        guard let item = notification.userInfo?["item"] as? NSToolbarItem,
+              item.itemIdentifier.rawValue == SidebarToolbarPlacement.addFolderID,
+              !claimed.contains(where: { $0 === item }) else { return }
+        // The toolbar hands out a fresh item each time the browser's toolbar is
+        // rebuilt, so this keeps every one it is given rather than a single one.
+        claimed.append(item)
+        item.addObserver(self, forKeyPath: Self.navigationalKey, options: [], context: nil)
+        item.isNavigational = false
+    }
+
+    @objc private func didRemoveItem(_ notification: Notification) {
+        guard let item = notification.userInfo?["item"] as? NSToolbarItem,
+              let index = claimed.firstIndex(where: { $0 === item }) else { return }
+        claimed.remove(at: index)
+        item.removeObserver(self, forKeyPath: Self.navigationalKey)
+    }
+
+    override func observeValue(
+        forKeyPath keyPath: String?,
+        of object: Any?,
+        change: [NSKeyValueChangeKey: Any]?,
+        context: UnsafeMutableRawPointer?
+    ) {
+        guard keyPath == Self.navigationalKey, !isClearing,
+              let item = claimed.first(where: { $0 === (object as AnyObject) }),
+              item.isNavigational else { return }
+        isClearing = true
+        item.isNavigational = false
+        isClearing = false
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 }
