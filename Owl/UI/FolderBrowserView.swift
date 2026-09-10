@@ -86,9 +86,11 @@ struct FolderBrowserView: View {
         // The drag cursor's copy badge is the whole affordance: a border and a
         // tint across the window said no more than the badge already does, and
         // washed out the library underneath while they were up.
+        // The empty `isTargeted` picks the overload whose action reports back
+        // whether the drop was taken; there is nothing to show while it hovers.
         .dropDestination(for: URL.self) { urls, _ in
             accept(urls)
-        }
+        } isTargeted: { _ in }
         .alert(
             "Owl Couldn’t Complete That Action",
             isPresented: Binding(
@@ -583,10 +585,26 @@ struct FolderBrowserView: View {
             pendingRootSelectionID = root.id
         }
 
-        if let video = videos.first {
+        // One video on its own is the same ask as File ▸ Open Video: it gets a
+        // window of its own and a place in Open Recent, rather than taking over
+        // the browser and its queue. Several at once are a queue already, and
+        // stay one.
+        if videos.count == 1, let video = videos.first {
+            openStandalone(video)
+        } else if let video = videos.first {
             appModel.play(video, from: videos, directory: video.deletingLastPathComponent())
         }
         return added || !videos.isEmpty
+    }
+
+    /// Opens `video` in a window of its own, quieting this window first so the
+    /// two are not heard at once. A window already playing the dropped file is
+    /// left alone: `FilePlayerWindows` raises it rather than opening a second.
+    private func openStandalone(_ video: URL) {
+        if appModel.playerState.currentURL?.standardizedFileURL != video.standardizedFileURL {
+            appModel.yieldPlayback()
+        }
+        FilePlayerWindows.shared.open(video)
     }
 
     private func chooseFolders() {

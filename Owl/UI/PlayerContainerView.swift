@@ -213,9 +213,11 @@ struct PlayerContainerView: View {
         // window still on screen once the player is up. The drag cursor's copy
         // badge is the whole affordance here: a border and a tint would sit
         // over the very picture the drop is aimed at.
+        // The empty `isTargeted` picks the overload whose action reports back
+        // whether the drop was taken; there is nothing to show while it hovers.
         .dropDestination(for: URL.self) { urls, _ in
             accept(urls)
-        }
+        } isTargeted: { _ in }
         .background {
             PlayerKeyboardMonitor(handle: handle)
                 .frame(width: 0, height: 0)
@@ -252,6 +254,17 @@ struct PlayerContainerView: View {
         }
         let videos = urls.filter(FolderLibrary.isVideo)
         guard let video = videos.first else { return false }
+        // One video on its own is the same ask as File ▸ Open Video: it gets a
+        // window of its own and a place in Open Recent. This window is quieted
+        // first so the two are not heard at once — unless the file dropped is
+        // the one already playing here, which only raises this window again.
+        if videos.count == 1 {
+            if appModel.playerState.currentURL?.standardizedFileURL != video.standardizedFileURL {
+                appModel.yieldPlayback()
+            }
+            FilePlayerWindows.shared.open(video)
+            return true
+        }
         appModel.play(video, from: videos, directory: video.deletingLastPathComponent())
         return true
     }
