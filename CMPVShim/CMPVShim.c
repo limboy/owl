@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 typedef void mpv_handle;
 typedef void mpv_render_context;
@@ -74,6 +75,11 @@ typedef struct mpv_opengl_init_params {
     void *get_proc_address_context;
 } mpv_opengl_init_params;
 
+typedef struct mpv_render_frame_info {
+    uint64_t flags;
+    int64_t target_time;
+} mpv_render_frame_info;
+
 typedef struct mpv_opengl_fbo {
     int fbo;
     int width;
@@ -95,7 +101,14 @@ enum {
     MPV_RENDER_PARAM_API_TYPE = 1,
     MPV_RENDER_PARAM_OPENGL_INIT_PARAMS = 2,
     MPV_RENDER_PARAM_OPENGL_FBO = 3,
-    MPV_RENDER_PARAM_FLIP_Y = 4
+    MPV_RENDER_PARAM_FLIP_Y = 4,
+    MPV_RENDER_PARAM_NEXT_FRAME_INFO = 11,
+    MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME = 12
+};
+
+enum {
+    MPV_RENDER_FRAME_INFO_PRESENT = 1 << 0,
+    MPV_RENDER_FRAME_INFO_REDRAW = 1 << 1
 };
 
 typedef unsigned long (*fn_mpv_client_api_version)(void);
@@ -117,6 +130,8 @@ typedef uint64_t (*fn_mpv_render_context_update)(mpv_render_context *);
 typedef int (*fn_mpv_render_context_render)(mpv_render_context *, mpv_render_param *);
 typedef void (*fn_mpv_render_context_report_swap)(mpv_render_context *);
 typedef void (*fn_mpv_render_context_free)(mpv_render_context *);
+typedef int (*fn_mpv_render_context_get_info)(mpv_render_context *, mpv_render_param);
+typedef int64_t (*fn_mpv_get_time)(mpv_handle *);
 
 struct MVPMPVPlayer {
     void *library;
@@ -144,6 +159,11 @@ struct MVPMPVPlayer {
     fn_mpv_render_context_render render_context_render;
     fn_mpv_render_context_report_swap render_context_report_swap;
     fn_mpv_render_context_free render_context_free;
+    fn_mpv_render_context_get_info render_context_get_info;
+    // The clock a frame's target time is measured on: nanoseconds from mpv
+    // 0.37 on, where frame info took the same unit, microseconds before it.
+    fn_mpv_get_time get_time;
+    int64_t get_time_units_per_second;
 };
 
 static void write_error(char *buffer, size_t size, const char *message) {
@@ -322,6 +342,17 @@ MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
     LOAD_REQUIRED(player, render_context_render, "mpv_render_context_render");
     LOAD_REQUIRED(player, render_context_report_swap, "mpv_render_context_report_swap");
     LOAD_REQUIRED(player, render_context_free, "mpv_render_context_free");
+    LOAD_REQUIRED(player, render_context_get_info, "mpv_render_context_get_info");
+    {
+        void *resolved = dlsym(player->library, "mpv_get_time_ns");
+        player->get_time_units_per_second = 1000000000;
+        if (resolved == NULL) {
+            resolved = load_symbol(player->library, "mpv_get_time_us", error_buffer, error_buffer_size);
+            if (resolved == NULL) { goto failure; }
+            player->get_time_units_per_second = 1000000;
+        }
+        memcpy(&player->get_time, &resolved, sizeof(resolved));
+    }
 
     unsigned long api_version = player->client_api_version();
     unsigned long major = api_version >> 16;
@@ -679,16 +710,46 @@ int mvp_mpv_render(
         .internal_format = 0
     };
     int flip = flip_y ? 1 : 0;
-    // Keep mpv's default target-time wait. Its update callback arrives BEFORE
-    // presentation is due; it is not a presentation clock. The dedicated
-    // render worker can wait here without blocking the main run loop.
+    // mpv's own target-time wait is turned off: it would block here, inside
+    // the caller's lock on the OpenGL context, and AppKit takes that same lock
+    // on the main thread whenever the view's geometry changes. The wait is
+    // done beforehand, outside the lock, by mvp_mpv_wait_for_next_frame.
+    int block_for_target_time = 0;
     mpv_render_param parameters[] = {
         { MPV_RENDER_PARAM_OPENGL_FBO, &fbo },
         { MPV_RENDER_PARAM_FLIP_Y, &flip },
+        { MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &block_for_target_time },
         { MPV_RENDER_PARAM_INVALID, NULL }
     };
     int status = player->render_context_render(player->render_context, parameters);
     return status < 0 ? status : 1;
+}
+
+// mpv renders a frame a little ahead of when it is due (up to
+// "video-timing-offset", 50ms by default), so a frame's picture only goes on
+// screen once that time comes. The cap keeps a bogus target time from
+// stalling the render worker.
+void mvp_mpv_wait_for_next_frame(MVPMPVPlayer *player) {
+    if (player == NULL || player->render_context == NULL) {
+        return;
+    }
+    mpv_render_frame_info info = { 0 };
+    mpv_render_param parameter = { MPV_RENDER_PARAM_NEXT_FRAME_INFO, &info };
+    if (player->render_context_get_info(player->render_context, parameter) < 0) {
+        return;
+    }
+    if (!(info.flags & MPV_RENDER_FRAME_INFO_PRESENT)
+        || (info.flags & MPV_RENDER_FRAME_INFO_REDRAW)
+        || info.target_time <= 0) {
+        return;
+    }
+    int64_t remaining = (info.target_time - player->get_time(player->handle))
+        / (player->get_time_units_per_second / 1000000);
+    const int64_t maximum_wait = 100000;
+    if (remaining <= 0) {
+        return;
+    }
+    usleep((useconds_t)(remaining < maximum_wait ? remaining : maximum_wait));
 }
 
 void mvp_mpv_report_swap(MVPMPVPlayer *player) {

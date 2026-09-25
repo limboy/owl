@@ -117,6 +117,13 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
     }
 
     private func render(width: Int, height: Int, forceRedraw: Bool) {
+        // Waited out before the context is locked, not inside mpv's render
+        // call: AppKit locks the same context on the main thread whenever the
+        // view's geometry changes, and a render worker that held it through
+        // every frame's wait left the main thread starved of it — a window
+        // resizing under a 4K picture stalled, fullscreen's animation with it.
+        mvp_mpv_wait_for_next_frame(engine.rawHandle)
+
         guard let context = stateLock.withLock({
             isActive && isVideoRenderingEnabled ? self.context : nil
         }) else { return }
