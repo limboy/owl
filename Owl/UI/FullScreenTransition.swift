@@ -75,11 +75,40 @@ final class FullScreenFrameAnimator {
         return frame
     }
 
+    /// Runs `body` once the window has stopped moving: now, or when the
+    /// animation in flight lands.
+    ///
+    /// AppKit ends the transition once the duration it handed out has passed,
+    /// not when the animation does, and on a main thread busy enough for the
+    /// animation to fall behind it reports the window out of fullscreen while
+    /// the frame is still on its way. A frame set then is overwritten by the
+    /// animation's own last step.
+    func whenSettled(_ body: @escaping @MainActor () -> Void) {
+        if animationsInFlight == 0 {
+            body()
+        } else {
+            pendingUntilSettled.append(body)
+        }
+    }
+
+    private var animationsInFlight = 0
+    private var pendingUntilSettled: [@MainActor () -> Void] = []
+
     private func animate(_ window: NSWindow, to frame: NSRect, over duration: TimeInterval) {
+        animationsInFlight += 1
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             window.animator().setFrame(frame, display: true)
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.animationsInFlight -= 1
+                guard self.animationsInFlight == 0 else { return }
+                let pending = self.pendingUntilSettled
+                self.pendingUntilSettled.removeAll()
+                pending.forEach { $0() }
+            }
         }
     }
 }
