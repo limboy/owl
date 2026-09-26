@@ -118,9 +118,11 @@ int mvp_mpv_render(
     bool flip_y,
     bool force_redraw
 );
-// Blocks until the next frame is due on screen. Call it before taking the
-// OpenGL context's lock for mvp_mpv_render, which no longer waits itself.
-void mvp_mpv_wait_for_next_frame(MVPMPVPlayer *player);
+// How long until the next frame is due on screen, for the caller to wait out
+// before mvp_mpv_render, which no longer waits itself. Like every mvp_mpv
+// render call, it needs the OpenGL context current and no other render call
+// running.
+int64_t mvp_mpv_microseconds_until_next_frame(MVPMPVPlayer *player);
 void mvp_mpv_report_swap(MVPMPVPlayer *player);
 void mvp_mpv_destroy_renderer(MVPMPVPlayer *player);
 

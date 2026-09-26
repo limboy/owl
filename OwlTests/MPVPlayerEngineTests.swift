@@ -128,6 +128,42 @@ final class MPVPlayerEngineTests: XCTestCase {
         }
     }
 
+    func testAnimatedResizeRestoresPlaybackSynchronizationAfterNestedResize() async throws {
+        try await withVideoSurface { engine, view, window in
+            let context = try XCTUnwrap(view.openGLContext)
+            func swapInterval() -> GLint {
+                context.lock()
+                defer { context.unlock() }
+                var interval: GLint = -1
+                context.getValues(&interval, for: .swapInterval)
+                return interval
+            }
+            XCTAssertEqual(swapInterval(), 1)
+            view.beginAnimatedResize()
+            view.beginAnimatedResize()
+            defer {
+                view.endAnimatedResize()
+                view.endAnimatedResize()
+            }
+            XCTAssertEqual(swapInterval(), 0)
+            engine.setPaused(true)
+            try await waitUntil { engine.state.isPaused }
+            let beforeResize = view.renderedFrameCount
+            window.setContentSize(NSSize(width: 640, height: 360))
+            try await waitUntil { view.renderedFrameCount > beforeResize }
+            XCTAssertGreaterThan(view.renderedFrameCount, beforeResize)
+            XCTAssertEqual(swapInterval(), 0, "a resize redraw must preserve the animation's interval")
+            view.endAnimatedResize()
+            XCTAssertEqual(swapInterval(), 0)
+            view.endAnimatedResize()
+            XCTAssertEqual(swapInterval(), 1)
+            engine.setPaused(false)
+            let beforeResume = view.renderedFrameCount
+            try await waitUntil { view.renderedFrameCount >= beforeResume + 4 }
+            XCTAssertGreaterThanOrEqual(view.renderedFrameCount, beforeResume + 4)
+        }
+    }
+
     func testSixtyFPSPlaybackKeepsRenderingThroughRepeatedMainThreadStalls() async throws {
         try await withVideoSurface(frameRate: 60, duration: 70) { engine, view, _ in
             // Exercise sustained playback, including callback coalescing after

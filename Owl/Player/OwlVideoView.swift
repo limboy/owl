@@ -30,6 +30,7 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
     private var isActive = false
     private var isVideoRenderingEnabled = false
     private var drawableSize = (width: 0, height: 0)
+    private var presentedSize = (width: 0, height: 0)
     private var renderPending = false
     private var redrawPending = false
     private var renderScheduled = false
@@ -116,22 +117,79 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
         }
     }
 
-    private func render(width: Int, height: Int, forceRedraw: Bool) {
-        // Waited out before the context is locked, not inside mpv's render
-        // call: AppKit locks the same context on the main thread whenever the
-        // view's geometry changes, and a render worker that held it through
-        // every frame's wait left the main thread starved of it — a window
-        // resizing under a 4K picture stalled, fullscreen's animation with it.
-        mvp_mpv_wait_for_next_frame(engine.rawHandle)
+    /// Draws the picture at `width` × `height` pixels right away, on the
+    /// calling thread, for a caller that holds the context's lock — the main
+    /// thread, when AppKit has just resized the view's surface.
+    ///
+    /// Left to the worker, the resized surface would go on screen with the
+    /// last picture in it, drawn at the old size and pinned to a corner, until
+    /// the worker caught up; during a window's resize animation that is a
+    /// picture jumping between sizes on every step.
+    func renderResized(width: Int, height: Int) {
+        let context = stateLock.withLock { () -> NSOpenGLContext? in
+            drawableSize = (width, height)
+            guard presentedSize.width != width || presentedSize.height != height else { return nil }
+            guard isActive, isVideoRenderingEnabled, width > 0, height > 0 else { return nil }
+            return self.context
+        }
+        guard let context else { return }
+        let previous = NSOpenGLContext.current
+        context.makeCurrentContext()
+        // Resizing already runs on AppKit's animation clock. Waiting for a
+        // second clock here blocks the main thread at every intermediate size.
+        // Keep normal playback's swap interval after this synchronous redraw.
+        var swapInterval: GLint = 0
+        context.getValues(&swapInterval, for: .swapInterval)
+        var immediateSwap: GLint = 0
+        context.setValues(&immediateSwap, for: .swapInterval)
+        defer {
+            context.setValues(&swapInterval, for: .swapInterval)
+            if let previous {
+                previous.makeCurrentContext()
+            } else {
+                NSOpenGLContext.clearCurrentContext()
+            }
+        }
+        draw(in: context, width: width, height: height, forceRedraw: true)
+    }
 
+    private func render(forceRedraw: Bool) {
         guard let context = stateLock.withLock({
             isActive && isVideoRenderingEnabled ? self.context : nil
         }) else { return }
 
+        // Waited out with the context unlocked, not inside mpv's render call:
+        // AppKit locks the same context on the main thread whenever the view's
+        // geometry changes, and a render worker that held it through every
+        // frame's wait left the main thread starved of it — a window resizing
+        // under a 4K picture stalled, fullscreen's animation with it. The
+        // question is asked under the lock, which is what keeps any two mpv
+        // render calls from running at once.
+        context.lock()
+        context.makeCurrentContext()
+        let wait = mvp_mpv_microseconds_until_next_frame(engine.rawHandle)
+        NSOpenGLContext.clearCurrentContext()
+        context.unlock()
+        if wait > 0 {
+            usleep(useconds_t(wait))
+        }
+
         context.lock()
         defer { context.unlock() }
+        // Read under the lock: the main thread changes the size and the
+        // surface together while holding it.
+        guard let size = stateLock.withLock({ () -> (width: Int, height: Int)? in
+            guard isActive, isVideoRenderingEnabled,
+                  drawableSize.width > 0, drawableSize.height > 0 else { return nil }
+            return drawableSize
+        }) else { return }
         context.makeCurrentContext()
         defer { NSOpenGLContext.clearCurrentContext() }
+        draw(in: context, width: size.width, height: size.height, forceRedraw: forceRedraw)
+    }
+
+    /// With the context locked and current.
+    private func draw(in context: NSOpenGLContext, width: Int, height: Int, forceRedraw: Bool) {
         var framebuffer: GLint = 0
         glGetIntegerv(GLenum(GL_DRAW_FRAMEBUFFER_BINDING), &framebuffer)
         let result = mvp_mpv_render(
@@ -145,12 +203,15 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
         guard result > 0 else { return }
         context.flushBuffer()
         mvp_mpv_report_swap(engine.rawHandle)
-        stateLock.withLock { completedFrames &+= 1 }
+        stateLock.withLock {
+            presentedSize = (width, height)
+            completedFrames &+= 1
+        }
     }
 
     private func drainPendingRenders() {
         while true {
-            let request = stateLock.withLock { () -> (width: Int, height: Int, redraw: Bool)? in
+            let redraw = stateLock.withLock { () -> Bool? in
                 guard isActive, isVideoRenderingEnabled, renderPending,
                       drawableSize.width > 0, drawableSize.height > 0 else {
                     renderPending = false
@@ -158,13 +219,13 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
                     renderScheduled = false
                     return nil
                 }
-                let request = (drawableSize.width, drawableSize.height, redrawPending)
+                let redraw = redrawPending
                 renderPending = false
                 redrawPending = false
-                return request
+                return redraw
             }
-            guard let request else { return }
-            render(width: request.width, height: request.height, forceRedraw: request.redraw)
+            guard let redraw else { return }
+            render(forceRedraw: redraw)
         }
     }
 
@@ -188,6 +249,42 @@ final class OwlVideoView: NSOpenGLView {
     let engine: MPVPlayerEngine
     fileprivate nonisolated(unsafe) let openGLLibrary: UnsafeMutableRawPointer?
     private let renderWorker: MVOpenGLRenderWorker
+    private var animatedResizeDepth = 0
+
+    /// Applies to both the worker and AppKit's synchronous redraws. Changing
+    /// only the latter still lets the worker hold the GL lock through vsync,
+    /// blocking the next step of the window animation.
+    func beginAnimatedResize() {
+        animatedResizeDepth += 1
+        guard animatedResizeDepth == 1 else { return }
+        setSwapInterval(0)
+    }
+
+    func endAnimatedResize() {
+        guard animatedResizeDepth > 0 else { return }
+        animatedResizeDepth -= 1
+        guard animatedResizeDepth == 0 else { return }
+        setSwapInterval(1)
+        needsDisplay = true
+    }
+
+    private func setSwapInterval(_ interval: GLint) {
+        guard let openGLContext else { return }
+        openGLContext.lock()
+        defer { openGLContext.unlock() }
+        var interval = interval
+        openGLContext.setValues(&interval, for: .swapInterval)
+    }
+
+    override func viewWillStartLiveResize() {
+        super.viewWillStartLiveResize()
+        beginAnimatedResize()
+    }
+
+    override func viewDidEndLiveResize() {
+        super.viewDidEndLiveResize()
+        endAnimatedResize()
+    }
 
     var renderedFrameCount: UInt64 { renderWorker.renderedFrameCount }
 
@@ -251,7 +348,7 @@ final class OwlVideoView: NSOpenGLView {
 
         // Present on the display refresh after mpv's target-time wait. Both
         // waits run on the render worker, independently of AppKit's run loop.
-        var swapInterval: GLint = 1
+        var swapInterval: GLint = animatedResizeDepth == 0 ? 1 : 0
         openGLContext.setValues(&swapInterval, for: .swapInterval)
 
         // mpv keeps this for as long as the render context lives, not just for
@@ -297,16 +394,28 @@ final class OwlVideoView: NSOpenGLView {
         }
     }
 
-    override func reshape() {
+    override func update() {
         guard let openGLContext else {
-            super.reshape()
+            super.update()
             needsDisplay = true
             return
         }
         openGLContext.lock()
-        super.reshape()
-        openGLContext.unlock()
-        needsDisplay = true
+        defer { openGLContext.unlock() }
+        // NSOpenGLView updates its drawable here, not in reshape() (whose
+        // default implementation is empty). Serialize the actual surface
+        // change with the worker and publish its matching size and picture
+        // before letting the worker draw again.
+        super.update()
+        if isRendererReady {
+            let (width, height) = pixelSize
+            renderWorker.renderResized(width: width, height: height)
+        }
+    }
+
+    private var pixelSize: (width: Int, height: Int) {
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1
+        return (Int(bounds.width * scale), Int(bounds.height * scale))
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -317,9 +426,7 @@ final class OwlVideoView: NSOpenGLView {
             return
         }
 
-        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1
-        let width = Int(bounds.width * scale)
-        let height = Int(bounds.height * scale)
+        let (width, height) = pixelSize
         renderWorker.enqueue(width: width, height: height)
     }
 

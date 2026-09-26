@@ -95,6 +95,8 @@ final class FullScreenFrameAnimator {
     private var pendingUntilSettled: [@MainActor () -> Void] = []
 
     private func animate(_ window: NSWindow, to frame: NSRect, over duration: TimeInterval) {
+        let videoViews = videoViews(in: window.contentView)
+        videoViews.forEach { $0.beginAnimatedResize() }
         animationsInFlight += 1
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
@@ -102,6 +104,7 @@ final class FullScreenFrameAnimator {
             window.animator().setFrame(frame, display: true)
         } completionHandler: { [weak self] in
             MainActor.assumeIsolated {
+                videoViews.forEach { $0.endAnimatedResize() }
                 guard let self else { return }
                 self.animationsInFlight -= 1
                 guard self.animationsInFlight == 0 else { return }
@@ -110,6 +113,12 @@ final class FullScreenFrameAnimator {
                 pending.forEach { $0() }
             }
         }
+    }
+
+    private func videoViews(in view: NSView?) -> [OwlVideoView] {
+        guard let view else { return [] }
+        if let videoView = view as? OwlVideoView { return [videoView] }
+        return view.subviews.flatMap { videoViews(in: $0) }
     }
 }
 

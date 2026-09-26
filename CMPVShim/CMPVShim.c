@@ -713,7 +713,8 @@ int mvp_mpv_render(
     // mpv's own target-time wait is turned off: it would block here, inside
     // the caller's lock on the OpenGL context, and AppKit takes that same lock
     // on the main thread whenever the view's geometry changes. The wait is
-    // done beforehand, outside the lock, by mvp_mpv_wait_for_next_frame.
+    // done beforehand, outside the lock, with
+    // mvp_mpv_microseconds_until_next_frame.
     int block_for_target_time = 0;
     mpv_render_param parameters[] = {
         { MPV_RENDER_PARAM_OPENGL_FBO, &fbo },
@@ -729,27 +730,27 @@ int mvp_mpv_render(
 // "video-timing-offset", 50ms by default), so a frame's picture only goes on
 // screen once that time comes. The cap keeps a bogus target time from
 // stalling the render worker.
-void mvp_mpv_wait_for_next_frame(MVPMPVPlayer *player) {
+int64_t mvp_mpv_microseconds_until_next_frame(MVPMPVPlayer *player) {
     if (player == NULL || player->render_context == NULL) {
-        return;
+        return 0;
     }
     mpv_render_frame_info info = { 0 };
     mpv_render_param parameter = { MPV_RENDER_PARAM_NEXT_FRAME_INFO, &info };
     if (player->render_context_get_info(player->render_context, parameter) < 0) {
-        return;
+        return 0;
     }
     if (!(info.flags & MPV_RENDER_FRAME_INFO_PRESENT)
         || (info.flags & MPV_RENDER_FRAME_INFO_REDRAW)
         || info.target_time <= 0) {
-        return;
+        return 0;
     }
     int64_t remaining = (info.target_time - player->get_time(player->handle))
         / (player->get_time_units_per_second / 1000000);
     const int64_t maximum_wait = 100000;
     if (remaining <= 0) {
-        return;
+        return 0;
     }
-    usleep((useconds_t)(remaining < maximum_wait ? remaining : maximum_wait));
+    return remaining < maximum_wait ? remaining : maximum_wait;
 }
 
 void mvp_mpv_report_swap(MVPMPVPlayer *player) {
