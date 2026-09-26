@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-09-26
+- Fix a video window freezing partway into full screen with demanding videos such as 4K HDR
+- Fix a video window getting a little smaller every time it leaves full screen
+
 ## [1.3.0] - 2026-09-11
 - Add Continue Watching to the sidebar, with unfinished videos played from folders, one-click resume, grid and list layouts, and offline-file indicators
 - Add File → Open Recent for standalone videos, reopening them in their own windows, with Clear Menu and preserved playback progress
