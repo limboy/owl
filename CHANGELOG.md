@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-09-26
+- Open a single video's window at the video's own size, centred on the screen, as IINA does — no more jumping from the last window's size
+- Smooth the picture's resizing while entering and leaving full screen
+
 ## [1.3.1] - 2026-09-26
 - Fix a video window freezing partway into full screen with demanding videos such as 4K HDR
 - Fix a video window getting a little smaller every time it leaves full screen
