@@ -269,6 +269,16 @@ final class MPVPlayerEngine: @unchecked Sendable {
                         && number.isFinite
                         && number > 0
                     state.videoAspectRatio = isUsable ? number : nil
+                case "video-out-params/dw", "video-out-params/dh":
+                    let isUsable = valueType == MVP_MPV_VALUE_DOUBLE
+                        && number.isFinite
+                        && number > 0
+                    let value = isUsable ? number : nil
+                    if name == "video-out-params/dw" {
+                        state.videoDisplayWidth = value
+                    } else {
+                        state.videoDisplayHeight = value
+                    }
                 default:
                     break
                 }
@@ -402,6 +412,9 @@ final class MPVPlayerEngine: @unchecked Sendable {
     /// It is set on every load, never cleared, because mpv reads it when a file
     /// begins and would otherwise carry it into the next one.
     ///
+    /// With `startsPaused` the file opens on its first frame and waits there,
+    /// for a window that is not on screen yet.
+    ///
     /// `loadfile` could take the same thing as a per-file option, but the
     /// argument it goes in moved when mpv 0.38 inserted an index before it, and
     /// this app loads whichever libmpv Homebrew has installed. `start` has been
@@ -414,10 +427,14 @@ final class MPVPlayerEngine: @unchecked Sendable {
         _ url: URL,
         startAt seconds: Double? = nil,
         selectsSubtitles: Bool = true,
-        preferredSubtitleLanguage: String? = nil
+        preferredSubtitleLanguage: String? = nil,
+        startsPaused: Bool = false
     ) -> Int {
         let generation = bumpLoadGeneration()
         state.resetForLoad(url, startAt: seconds)
+        if startsPaused {
+            state.isPaused = true
+        }
         discardPendingTimePosition()
         command(["set", "start", seconds.map { String($0) } ?? "none"])
         // Set on every load rather than once, and cleared to the empty list
@@ -426,7 +443,7 @@ final class MPVPlayerEngine: @unchecked Sendable {
         command(["set", "slang", preferredSubtitleLanguage ?? ""])
         command(["set", "sid", selectsSubtitles ? "auto" : "no"])
         command(["loadfile", url.path, "replace"])
-        setPaused(false)
+        setPaused(startsPaused)
         return generation
     }
 

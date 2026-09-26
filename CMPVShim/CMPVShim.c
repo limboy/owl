@@ -440,6 +440,11 @@ MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
         "video-out-params/aspect",
         MPV_FORMAT_DOUBLE
     );
+    // The picture's size in pixels once its aspect is corrected, which a
+    // window opening on it takes its first size from. Integers to mpv, asked
+    // for as doubles so they arrive the way every other number here does.
+    player->observe_property(player->handle, 11, "video-out-params/dw", MPV_FORMAT_DOUBLE);
+    player->observe_property(player->handle, 12, "video-out-params/dh", MPV_FORMAT_DOUBLE);
 
     write_error(error_buffer, error_buffer_size, "");
     return player;

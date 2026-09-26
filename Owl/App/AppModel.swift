@@ -33,6 +33,9 @@ final class AppModel: ObservableObject {
     /// `MPV_ERROR_NOTHING_TO_PLAY`. It waits here instead, and goes to mpv on
     /// the first draw.
     private var pendingLoad: (url: URL, startAt: Double?)?
+    /// Whether a file handed to mpv now opens paused. Set for a window that is
+    /// not on screen yet, so that nothing is heard before anything is seen.
+    private var holdsPlayback = false
 
     /// The choice remembered for the file being opened, waiting for mpv to say
     /// what tracks it actually has.
@@ -114,6 +117,21 @@ final class AppModel: ObservableObject {
     func yieldPlayback() {
         guard playerState.hasMedia, !playerState.isPaused else { return }
         engine?.setPaused(true)
+    }
+
+    /// Makes the files handed to mpv from now on open paused, until
+    /// `releasePlayback()`.
+    func holdPlayback() {
+        holdsPlayback = true
+    }
+
+    /// Plays what `holdPlayback()` kept paused, and lets the files after it
+    /// play as they open.
+    func releasePlayback() {
+        guard holdsPlayback else { return }
+        holdsPlayback = false
+        guard playerState.hasMedia, pendingLoad == nil else { return }
+        engine?.setPaused(false)
     }
 
     /// Releases the renderer before the engine, in that order. mpv holds an
@@ -421,7 +439,8 @@ final class AppModel: ObservableObject {
             url,
             startAt: startAt,
             selectsSubtitles: SubtitlePreference.isEnabled,
-            preferredSubtitleLanguage: SubtitlePreference.preferredLanguage
+            preferredSubtitleLanguage: SubtitlePreference.preferredLanguage,
+            startsPaused: holdsPlayback
         )
     }
 

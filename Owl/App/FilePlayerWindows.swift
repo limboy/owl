@@ -93,6 +93,27 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     /// The shape the window keeps outside fullscreen, once mpv has reported the
     /// picture's, and nil until then.
     private var videoAspectRatio: CGFloat?
+    /// How many pixels the picture covers once drawn, and nil until mpv has
+    /// reported both sides of it.
+    private var videoPixelArea: CGFloat?
+    /// Whether the window has been given its opening size, which it takes once
+    /// both the picture's shape and its size are known.
+    private var hasSizedForVideo = false
+
+    /// Whether the window can be seen yet. Until it has its opening size it is
+    /// on screen but transparent — as IINA holds its window back — so it first
+    /// appears already at that size, rather than at the saved frame and then
+    /// jumping to it. It has to be on screen all the same: the renderer is only
+    /// made on the video view's first draw, and nothing plays before it is.
+    private var isRevealed = false
+    /// Shows the window anyway should the video's size never come: for a file
+    /// with no picture, one mpv cannot open, or a load that hangs.
+    private var revealFallback: DispatchWorkItem?
+
+    /// How long a loaded file is given to report a picture before the window
+    /// is shown without one, and how long a load is given at all.
+    private static let revealGraceAfterLoad: TimeInterval = 1
+    private static let revealDeadline: TimeInterval = 5
 
     /// The window's own animation in and out of fullscreen — see the type for
     /// why the transition is not left to AppKit.
@@ -126,6 +147,7 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         )
         window.backgroundColor = .black
         window.isOpaque = true
+        window.alphaValue = 0
         window.tabbingMode = .disallowed
         // The controller outlives the close, and takes the window down with it.
         window.isReleasedWhenClosed = false
@@ -144,7 +166,9 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         hostingController.sizingOptions = []
         window.contentViewController = hostingController
 
+        appModel.holdPlayback()
         observeVideoAspectRatio()
+        observeRevealFallbacks()
     }
 
     /// Sizes and places the window: where the last window of this kind was left,
@@ -171,7 +195,51 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: false)
     }
 
+    /// Makes the window visible and lets its file play. Once only.
+    private func reveal() {
+        guard !isRevealed else { return }
+        isRevealed = true
+        revealFallback?.cancel()
+        revealFallback = nil
+        window.alphaValue = 1
+        appModel.releasePlayback()
+    }
+
+    private func scheduleReveal(after delay: TimeInterval) {
+        revealFallback?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.reveal() }
+        revealFallback = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    private func observeRevealFallbacks() {
+        scheduleReveal(after: Self.revealDeadline)
+
+        let state = appModel.playerState
+        // The picture's size arrives a moment after the file opens, once the
+        // first frame is decoded; a file with none never reports one.
+        state.$isLoading
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .sink { [weak self] _ in
+                guard let self, !isRevealed else { return }
+                scheduleReveal(after: Self.revealGraceAfterLoad)
+            }
+            .store(in: &cancellables)
+        state.$errorMessage
+            .compactMap { $0 }
+            .sink { [weak self] _ in self?.reveal() }
+            .store(in: &cancellables)
+        // No libmpv: the window shows how to install it rather than a video.
+        appModel.$startupError
+            .compactMap { $0 }
+            .sink { [weak self] _ in self?.reveal() }
+            .store(in: &cancellables)
+    }
+
     func windowWillClose(_ notification: Notification) {
+        revealFallback?.cancel()
         cancellables.removeAll()
         ActivePlayer.shared.resign(appModel)
         appModel.shutdown()
@@ -190,12 +258,23 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     /// letterboxing then only appears where the shape of the thing showing the
     /// picture is not the picture's own, which is fullscreen and nowhere else.
     private func observeVideoAspectRatio() {
-        appModel.playerState.$videoAspectRatio
-            .removeDuplicates()
-            .sink { [weak self] ratio in
-                self?.applyVideoAspectRatio(ratio.map { CGFloat($0) })
+        let state = appModel.playerState
+        Publishers.CombineLatest3(
+            state.$videoAspectRatio,
+            state.$videoDisplayWidth,
+            state.$videoDisplayHeight
+        )
+        .removeDuplicates(by: ==)
+        .sink { [weak self] ratio, width, height in
+            guard let self else { return }
+            if let width, let height {
+                videoPixelArea = CGFloat(width * height)
+            } else {
+                videoPixelArea = nil
             }
-            .store(in: &cancellables)
+            applyVideoAspectRatio(ratio.map { CGFloat($0) })
+        }
+        .store(in: &cancellables)
     }
 
     private func applyVideoAspectRatio(_ ratio: CGFloat?) {
@@ -214,7 +293,13 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         // and the frame that goes with it, are put back on the way out.
         guard !window.styleMask.contains(.fullScreen) else { return }
         window.contentAspectRatio = NSSize(width: ratio, height: 1)
-        window.setFrame(reshapedFrame(for: ratio), display: true)
+        if !hasSizedForVideo, let videoPixelArea {
+            window.setFrame(reshapedFrame(for: ratio, openingOn: videoPixelArea), display: true)
+            hasSizedForVideo = true
+            reveal()
+        } else {
+            window.setFrame(reshapedFrame(for: ratio), display: true)
+        }
     }
 
     /// Lets the window take any shape again.
@@ -239,9 +324,15 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     /// The window's frame with its content reshaped to `ratio`, holding the
     /// area it covers and the point it is centred on, and staying on screen.
     ///
+    /// Given `pixelArea`, the window is opening on the video: it is centred on
+    /// the screen, and covers that area instead: the picture at its own size, a pixel to a pixel of the display
+    /// — so half that in points on a Retina one — as IINA opens a file. The
+    /// area rather than the two sides is what is taken from mpv, so the shape
+    /// comes from `ratio` alone and a rotated picture cannot disagree with it.
+    ///
     /// Holding the area rather than the width is what keeps a window opened on
     /// a tall video from becoming a tall window as wide as the last one was.
-    private func reshapedFrame(for ratio: CGFloat) -> NSRect {
+    private func reshapedFrame(for ratio: CGFloat, openingOn pixelArea: CGFloat? = nil) -> NSRect {
         let frame = window.frame
         // Measured against the windowed style rather than asked of the window:
         // on the way out of fullscreen the window still answers as a fullscreen
@@ -249,9 +340,18 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         // counted into the picture and the window grown by its height.
         let content = Self.contentSize(ofFrame: frame)
         guard content.width > 0, content.height > 0 else { return frame }
-        guard abs(content.width / content.height - ratio) > 0.001 else { return frame }
+        guard pixelArea != nil || abs(content.width / content.height - ratio) > 0.001 else { return frame }
 
-        var width = (content.width * content.height * ratio).squareRoot()
+        let screen = window.screen ?? NSScreen.main
+        let visible = screen?.visibleFrame
+
+        var width: CGFloat
+        if let pixelArea {
+            let scale = screen?.backingScaleFactor ?? window.backingScaleFactor
+            width = (pixelArea * ratio).squareRoot() / scale
+        } else {
+            width = (content.width * content.height * ratio).squareRoot()
+        }
         var height = width / ratio
 
         let minimum = window.contentMinSize
@@ -261,7 +361,7 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
             height *= scale
         }
 
-        if let visible = (window.screen ?? NSScreen.main)?.visibleFrame {
+        if let visible {
             let limit = Self.contentSize(ofFrame: visible)
             if width > limit.width || height > limit.height {
                 let scale = min(limit.width / width, limit.height / height)
@@ -279,9 +379,15 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
             ),
             styleMask: Self.windowedStyleMask
         )
+        // A window opening on the video is centred on the screen, as IINA
+        // places one, rather than on wherever the saved frame left it.
+        var centre = NSPoint(x: frame.midX, y: frame.midY)
+        if pixelArea != nil, let visible {
+            centre = NSPoint(x: visible.midX, y: visible.midY)
+        }
         reshaped.origin = NSPoint(
-            x: (frame.midX - reshaped.width / 2).rounded(),
-            y: (frame.midY - reshaped.height / 2).rounded()
+            x: (centre.x - reshaped.width / 2).rounded(),
+            y: (centre.y - reshaped.height / 2).rounded()
         )
         return keptOnScreen(reshaped)
     }

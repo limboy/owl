@@ -100,6 +100,11 @@ final class PlayerState: ObservableObject {
     /// will be drawn — or nil while there is no video to take one from.
     /// Mirrors mpv's `video-out-params/aspect`.
     @Published var videoAspectRatio: Double?
+    /// The picture's width and height in pixels as it will be drawn, aspect
+    /// corrected, or nil while there is no video. Mirrors mpv's
+    /// `video-out-params/dw` and `video-out-params/dh`.
+    @Published var videoDisplayWidth: Double?
+    @Published var videoDisplayHeight: Double?
     @Published var subtitles: [SubtitleTrack] = []
     @Published var audioTracks: [AudioTrack] = []
     @Published var errorMessage: String?
@@ -156,6 +161,8 @@ final class PlayerState: ObservableObject {
         duration = 0
         currentURL = nil
         videoAspectRatio = nil
+        videoDisplayWidth = nil
+        videoDisplayHeight = nil
         subtitles = []
         audioTracks = []
         errorMessage = nil
