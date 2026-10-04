@@ -114,7 +114,6 @@ private struct PlayerLayout: View {
             appModel: appModel,
             engine: engine,
             videoView: videoView,
-            showsQueueControls: true,
             isVideoSurfaceActive: isVideoSurfaceActive,
             onClose: dismissPlayer
         )

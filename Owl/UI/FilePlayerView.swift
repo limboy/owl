@@ -16,7 +16,6 @@ struct FilePlayerView: View {
                     appModel: appModel,
                     engine: engine,
                     videoView: videoView,
-                    showsQueueControls: false,
                     // The window's own title bar names this file already.
                     showsTitle: false
                 )

@@ -6,10 +6,6 @@ struct PlayerContainerView: View {
     let engine: MPVPlayerEngine
     let videoView: OwlVideoView
 
-    /// Whether there is a queue to move through. A window opened on one file has
-    /// nothing to go on to, so it is shown neither previous nor next controls.
-    let showsQueueControls: Bool
-
     /// Whether to name the video in the middle of the controls.
     ///
     /// Only for a host that has covered the window's own title bar with the
@@ -55,7 +51,6 @@ struct PlayerContainerView: View {
         appModel: AppModel,
         engine: MPVPlayerEngine,
         videoView: OwlVideoView,
-        showsQueueControls: Bool = true,
         showsTitle: Bool = true,
         isVideoSurfaceActive: Bool = true,
         onClose: (@MainActor () -> Void)? = nil
@@ -63,7 +58,6 @@ struct PlayerContainerView: View {
         self.appModel = appModel
         self.engine = engine
         self.videoView = videoView
-        self.showsQueueControls = showsQueueControls
         self.showsTitle = showsTitle
         self.isVideoSurfaceActive = isVideoSurfaceActive
         self.onClose = onClose
@@ -129,7 +123,6 @@ struct PlayerContainerView: View {
                         appModel: appModel,
                         engine: engine,
                         state: state,
-                        showsQueueControls: showsQueueControls,
                         showsTitle: showsTitle,
                         isSeeking: $isSeeking,
                         seekValue: $seekValue
@@ -473,7 +466,6 @@ private struct PlayerControlsView: View {
     @ObservedObject var appModel: AppModel
     let engine: MPVPlayerEngine
     @ObservedObject var state: PlayerState
-    let showsQueueControls: Bool
     let showsTitle: Bool
     @Binding var isSeeking: Bool
     @Binding var seekValue: Double
@@ -508,11 +500,9 @@ private struct PlayerControlsView: View {
     /// their halves.
     private var buttonRow: some View {
         HStack(spacing: 12) {
-            HStack(spacing: 10) {
-                transportControls
-            }
-            .fixedSize()
-            .frame(maxWidth: .infinity, alignment: .leading)
+            playPauseButton
+                .fixedSize()
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsTitle, let title = state.currentTitle {
                 Text(title)
@@ -532,25 +522,13 @@ private struct PlayerControlsView: View {
         }
     }
 
-    @ViewBuilder
-    private var transportControls: some View {
-        Group {
-            controlButton(
-                state.isPaused ? "play.fill" : "pause.fill",
-                size: 20,
-                help: state.isPaused ? "Play" : "Pause"
-            ) {
-                appModel.togglePlayPause()
-            }
-
-            if showsQueueControls {
-                controlButton("backward.end.fill", help: "Previous video") {
-                    appModel.playPrevious()
-                }
-                controlButton("forward.end.fill", help: "Next video") {
-                    appModel.playNext()
-                }
-            }
+    private var playPauseButton: some View {
+        controlButton(
+            state.isPaused ? "play.fill" : "pause.fill",
+            size: 20,
+            help: state.isPaused ? "Play" : "Pause"
+        ) {
+            appModel.togglePlayPause()
         }
     }
 
