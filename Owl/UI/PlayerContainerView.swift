@@ -472,13 +472,13 @@ private struct PlayerControlsView: View {
 
     var body: some View {
         VStack(spacing: 6) {
+            buttonRow
             seekSlider
                 .frame(minWidth: 80)
-            buttonRow
         }
         .padding(.horizontal, 14)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
         .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
     }
 
@@ -486,7 +486,7 @@ private struct PlayerControlsView: View {
     /// tracks, speed and subtitles on the right.
     ///
     /// The two sides take equal shares of whatever the title leaves, so the
-    /// title stays centred under the timeline for as long as both fit in
+    /// title stays centred above the timeline for as long as both fit in
     /// their halves.
     private var buttonRow: some View {
         HStack(spacing: 12) {
