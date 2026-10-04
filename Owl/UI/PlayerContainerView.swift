@@ -472,7 +472,8 @@ private struct PlayerControlsView: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            timelineRow
+            seekSlider
+                .frame(minWidth: 80)
             buttonRow
         }
         .padding(.horizontal, 14)
@@ -481,28 +482,20 @@ private struct PlayerControlsView: View {
         .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
     }
 
-    /// The timeline, with the time played and the length either side of it.
-    private var timelineRow: some View {
-        // Tight, so the timeline reaches nearly to its times.
-        HStack(spacing: 6) {
-            currentTimeLabel
-            seekSlider
-                .frame(minWidth: 80)
-            durationLabel
-        }
-    }
-
-    /// Playback on the left, the title in the middle, volume, tracks and
-    /// speed and subtitles on the right.
+    /// Play/pause and the time on the left, the title in the middle, volume,
+    /// tracks, speed and subtitles on the right.
     ///
     /// The two sides take equal shares of whatever the title leaves, so the
     /// title stays centred under the timeline for as long as both fit in
     /// their halves.
     private var buttonRow: some View {
         HStack(spacing: 12) {
-            playPauseButton
-                .fixedSize()
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 10) {
+                playPauseButton
+                timeLabel
+            }
+            .fixedSize()
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsTitle, let title = state.currentTitle {
                 Text(title)
@@ -532,12 +525,13 @@ private struct PlayerControlsView: View {
         }
     }
 
-    private var currentTimeLabel: some View {
-        Text(playerTimeString(isSeeking ? seekValue : state.currentTime))
+    /// "12:34 / 48:39": the time played, following a drag on the timeline,
+    /// and the length.
+    private var timeLabel: some View {
+        Text("\(playerTimeString(isSeeking ? seekValue : state.currentTime)) / \(playerTimeString(state.duration))")
             .font(.caption)
             .foregroundStyle(Color.white.opacity(0.75))
             .monospacedDigit()
-            .fixedSize()
     }
 
     private var seekSlider: some View {
@@ -551,14 +545,6 @@ private struct PlayerControlsView: View {
         ) { value in
             engine.seek(to: value)
         }
-    }
-
-    private var durationLabel: some View {
-        Text(playerTimeString(state.duration))
-            .font(.caption)
-            .foregroundStyle(Color.white.opacity(0.75))
-            .monospacedDigit()
-            .fixedSize()
     }
 
     @ViewBuilder
