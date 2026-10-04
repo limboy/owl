@@ -9,7 +9,6 @@ struct FolderBrowserView: View {
 
     @ObservedObject var appModel: AppModel
     @ObservedObject private var library: FolderLibrary
-    @ObservedObject private var playbackQueue: PlaybackQueue
 
     /// Whether a video is up, passed in rather than read from `PlayerState`.
     ///
@@ -38,7 +37,6 @@ struct FolderBrowserView: View {
         self.appModel = appModel
         self.hasMedia = hasMedia
         _library = ObservedObject(wrappedValue: library)
-        _playbackQueue = ObservedObject(wrappedValue: appModel.playbackQueue)
     }
 
     var body: some View {
@@ -71,7 +69,7 @@ struct FolderBrowserView: View {
                     }
 
                     ToolbarItem(placement: .primaryAction) {
-                        playbackOptionsMenu
+                        optionsMenu
                     }
                 }
                 // The toolbar is drawn in the title bar, above the content, so
@@ -286,18 +284,8 @@ struct FolderBrowserView: View {
         .help("Choose Grid or List View")
     }
 
-    private var playbackOptionsMenu: some View {
+    private var optionsMenu: some View {
         Menu {
-            Menu("Loop") {
-                repeatModeToggle("Off", mode: .off)
-                repeatModeToggle("All Videos", mode: .all)
-                repeatModeToggle("Current Video", mode: .one)
-            }
-
-            Toggle("Shuffle", isOn: $playbackQueue.isShuffled)
-
-            Divider()
-
             Toggle("Sync Metadata", isOn: $library.isMetadataSyncEnabled)
                 .disabled(!library.isMetadataSyncAvailable)
 
@@ -310,15 +298,8 @@ struct FolderBrowserView: View {
         } label: {
             Image(systemName: "ellipsis")
         }
-        .help("Playback Options")
-        .accessibilityLabel("Playback Options")
-    }
-
-    private func repeatModeToggle(_ title: String, mode: RepeatMode) -> some View {
-        Toggle(title, isOn: Binding(
-            get: { playbackQueue.repeatMode == mode },
-            set: { if $0 { playbackQueue.repeatMode = mode } }
-        ))
+        .help("Options")
+        .accessibilityLabel("Options")
     }
 
     private var detailTitle: String {
