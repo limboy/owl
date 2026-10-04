@@ -10,7 +10,7 @@ struct PlayerContainerView: View {
     /// nothing to go on to, so it is shown neither previous nor next controls.
     let showsQueueControls: Bool
 
-    /// Whether to name the video over the picture.
+    /// Whether to name the video in the middle of the controls.
     ///
     /// Only for a host that has covered the window's own title bar with the
     /// player. A window opened on one file keeps its title bar — floating over
@@ -113,16 +113,6 @@ struct PlayerContainerView: View {
             }
 
             VStack {
-                if showsTitle, state.hasMedia, let title = state.currentTitle {
-                    titleBar(title)
-                        .opacity(controlsVisible ? 1 : 0)
-                        .allowsHitTesting(false)
-                        .padding(.top, 16)
-                        // Clear of the close button, which floats in the same
-                        // band at the trailing edge.
-                        .padding(.horizontal, 62)
-                }
-
                 if let error = state.errorMessage {
                     errorBanner(error)
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -136,6 +126,7 @@ struct PlayerContainerView: View {
                         engine: engine,
                         state: state,
                         showsQueueControls: showsQueueControls,
+                        showsTitle: showsTitle,
                         isSeeking: $isSeeking,
                         seekValue: $seekValue
                     )
@@ -244,9 +235,9 @@ struct PlayerContainerView: View {
         case .togglePlayPause:
             appModel.togglePlayPause()
         case .seekBackward:
-            appModel.seek(by: -5)
+            appModel.seek(by: -10)
         case .seekForward:
-            appModel.seek(by: 5)
+            appModel.seek(by: 10)
         case .volumeUp:
             appModel.changeVolume(by: 5)
         case .volumeDown:
@@ -288,24 +279,6 @@ struct PlayerContainerView: View {
         }
         appModel.play(video, from: videos, directory: video.deletingLastPathComponent())
         return true
-    }
-
-    /// Names the video over the top of the picture, for as long as the controls
-    /// are up.
-    ///
-    /// For a host that covers the window whole — title bar strip included, and
-    /// in full screen there is no title bar at all — so without this there is
-    /// nothing on screen that says which video is playing. A host whose window
-    /// keeps its own title bar passes `showsTitle: false` instead.
-    private func titleBar(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 9)
-            .playerPanel(cornerRadius: 12)
     }
 
     @ViewBuilder
@@ -485,79 +458,67 @@ private struct PlayerControlsView: View {
     let engine: MPVPlayerEngine
     @ObservedObject var state: PlayerState
     let showsQueueControls: Bool
+    let showsTitle: Bool
     @Binding var isSeeking: Bool
     @Binding var seekValue: Double
-    @State private var isVolumePopoverPresented = false
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            regularControls
-            compactControls
+        VStack(spacing: 6) {
+            timelineRow
+            buttonRow
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 11)
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
         .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
     }
 
-    private var regularControls: some View {
-        HStack(spacing: 12) {
-            transportControls
-
-            Divider()
-                .frame(height: 18)
-
-            volumeControl
-
+    /// The timeline, with the time played and the length either side of it.
+    private var timelineRow: some View {
+        // Tight, so the timeline reaches nearly to its times.
+        HStack(spacing: 6) {
             currentTimeLabel
             seekSlider
-                .frame(minWidth: 120)
-                .layoutPriority(1)
+                .frame(minWidth: 80)
             durationLabel
-
-            secondaryControls
         }
-        // Including the surrounding padding, this layout is selected at
-        // approximately 630 points or wider.
-        .frame(minWidth: 560)
     }
 
-    private var compactControls: some View {
-        VStack(spacing: 8) {
-            VStack(spacing: 2) {
-                HStack {
-                    Text(playerTimeString(isSeeking ? seekValue : state.currentTime))
-                    Spacer()
-                    Text(playerTimeString(state.duration))
-                }
-                .font(.caption)
-                .foregroundStyle(Color.white.opacity(0.75))
-                .monospacedDigit()
-
-                seekSlider
-                    .frame(minWidth: 80)
-            }
-            .frame(maxWidth: .infinity)
-
-            HStack(spacing: 14) {
+    /// Playback on the left, the title in the middle, volume, tracks and
+    /// speed and subtitles on the right.
+    ///
+    /// The two sides take equal shares of whatever the title leaves, so the
+    /// title stays centred under the timeline for as long as both fit in
+    /// their halves.
+    private var buttonRow: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 transportControls
+            }
+            .fixedSize()
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-                volumeControl
+            if showsTitle, let title = state.currentTitle {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(title)
+            }
 
-                Spacer(minLength: 4)
+            HStack(spacing: 12) {
+                volumeMenu
                 secondaryControls
             }
+            .fixedSize()
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
     @ViewBuilder
     private var transportControls: some View {
         Group {
-            if showsQueueControls {
-                controlButton("backward.end.fill", help: "Previous video") {
-                    appModel.playPrevious()
-                }
-            }
-
             controlButton(
                 state.isPaused ? "play.fill" : "pause.fill",
                 size: 20,
@@ -567,6 +528,9 @@ private struct PlayerControlsView: View {
             }
 
             if showsQueueControls {
+                controlButton("backward.end.fill", help: "Previous video") {
+                    appModel.playPrevious()
+                }
                 controlButton("forward.end.fill", help: "Next video") {
                     appModel.playNext()
                 }
@@ -579,7 +543,7 @@ private struct PlayerControlsView: View {
             .font(.caption)
             .foregroundStyle(Color.white.opacity(0.75))
             .monospacedDigit()
-            .frame(width: 54, alignment: .trailing)
+            .fixedSize()
     }
 
     private var seekSlider: some View {
@@ -600,16 +564,16 @@ private struct PlayerControlsView: View {
             .font(.caption)
             .foregroundStyle(Color.white.opacity(0.75))
             .monospacedDigit()
-            .frame(width: 54, alignment: .leading)
+            .fixedSize()
     }
 
     @ViewBuilder
     private var secondaryControls: some View {
         Group {
-            speedMenu
             if state.audioTracks.count > 1 {
                 audioMenu
             }
+            speedMenu
             subtitleMenu
         }
     }
@@ -618,72 +582,58 @@ private struct PlayerControlsView: View {
         PlayerContainerView.volumeSymbol(volume: state.volume, isMuted: state.isMuted)
     }
 
-    private var volumeControl: some View {
-        Button {
-            isVolumePopoverPresented.toggle()
-        } label: {
-            Image(systemName: volumeSymbol)
-                .font(.system(size: 15, weight: .semibold))
-                .frame(width: 24, height: 24)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .popover(isPresented: $isVolumePopoverPresented, arrowEdge: .bottom) {
-            VStack(spacing: 10) {
-                HStack(spacing: 8) {
-                    Button {
-                        engine.toggleMute()
-                    } label: {
-                        Image(systemName: state.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                            .frame(width: 22, height: 22)
-                    }
-                    .buttonStyle(.plain)
-                    .help(state.isMuted ? "Unmute" : "Mute")
+    /// The levels the volume menu offers, loudest first.
+    private static let volumeLevels: [Double] = [100, 75, 50, 25, 0]
 
-                    Text("Volume")
-                        .font(.headline)
-                    Spacer()
-                    Text("\(Int(state.volume.rounded()))%")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+    /// The speaker, which opens the levels to choose from.
+    private var volumeMenu: some View {
+        PlayerMenuButton(help: "Volume") {
+            Self.volumeLevels.map { level in
+                .choice("\(Int(level))%", selected: level == selectedVolumeLevel) {
+                    selectVolume(level)
                 }
-
-                Slider(value: Binding(
-                    get: { state.volume },
-                    set: {
-                        state.volume = $0
-                        engine.setVolume($0)
-                    }
-                ), in: 0...100)
-                .frame(width: 190)
             }
-            .padding(14)
-            .frame(width: 220)
+        } label: {
+            Image(systemName: volumeSymbol + ".fill")
+                .font(.system(size: 14, weight: .regular))
+                // Wide enough for the loudest speaker, its back edge pinned,
+                // so the buttons beside it stay put as the waves come and go.
+                .frame(width: 24, height: 22, alignment: .leading)
         }
-        .help("Volume")
+    }
+
+    /// The level nearest the volume as it is, a mute counting as none, so
+    /// a volume set some other way still checks one of them.
+    private var selectedVolumeLevel: Double {
+        let volume = state.isMuted ? 0 : state.volume
+        return Self.volumeLevels.min { abs($0 - volume) < abs($1 - volume) } ?? 0
+    }
+
+    private func selectVolume(_ level: Double) {
+        // A level above none is meant to be heard, so it lifts a mute too.
+        if state.isMuted, level > 0 {
+            engine.toggleMute()
+        }
+        state.volume = level
+        engine.setVolume(level)
     }
 
     private static let speedPresets: [Double] = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
+    /// The current speed, which opens the speeds to choose from.
     private var speedMenu: some View {
-        Menu {
-            ForEach(Self.speedPresets, id: \.self) { preset in
-                trackToggle(
-                    playerSpeedLabel(preset),
-                    selected: abs(state.speed - preset) < 0.001
-                ) {
+        PlayerMenuButton(help: "Playback Speed") {
+            Self.speedPresets.map { preset in
+                .choice(playerSpeedLabel(preset), selected: abs(state.speed - preset) < 0.001) {
                     appModel.setSpeed(preset)
                 }
             }
         } label: {
-            Image(systemName: "gauge.with.dots.needle.67percent")
-                .frame(width: 22, height: 22)
+            Text(playerSpeedLabel(state.speed))
+                .font(.system(size: 12, weight: .semibold))
+                .monospacedDigit()
+                .frame(minWidth: 30, minHeight: 22)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Playback Speed")
     }
 
     /// What the subtitle button offers: whether subtitles are showing, which
@@ -691,24 +641,23 @@ private struct PlayerControlsView: View {
     ///
     /// Nothing else. Everything that is a setting rather than a choice about
     /// the file being watched — the timing, the size, the track after this one
-    /// — is in the Subtitles menu in the menu bar. This one opens over the
-    /// picture, mid-film, and what is wanted then is which subtitle to read.
+    /// — is in the Subtitles menu in the menu bar.
     private var subtitleMenu: some View {
-        Menu {
+        PlayerMenuButton(help: "Subtitles") {
             // Radio behaviour with the tracks below it: checking this clears
             // whichever track was checked, because mpv only ever has one
             // subtitle selected and the checkmarks read straight from that.
-            trackToggle("Disabled", selected: state.selectedSubtitleID == nil) {
-                appModel.selectSubtitle(nil)
-            }
-
-            Divider()
-
+            var items: [PlayerMenuItem] = [
+                .choice("Off", selected: state.selectedSubtitleID == nil) {
+                    appModel.selectSubtitle(nil)
+                },
+                .divider,
+            ]
             if state.subtitles.isEmpty {
-                Text("No subtitles in this file")
+                items.append(.note("No subtitles in this file"))
             } else {
-                ForEach(state.subtitles) { track in
-                    trackToggle(
+                items += state.subtitles.map { track in
+                    .choice(
                         track.displayName + (track.isExternal ? " — External" : ""),
                         selected: track.isSelected
                     ) {
@@ -716,59 +665,39 @@ private struct PlayerControlsView: View {
                     }
                 }
             }
-
-            Divider()
-
-            Button("Load Subtitle…") {
-                SubtitleFile.choose { url in
-                    appModel.loadExternalSubtitle(url)
-                }
-            }
+            items += [
+                .divider,
+                .action("Load Subtitle…") {
+                    SubtitleFile.choose { url in
+                        appModel.loadExternalSubtitle(url)
+                    }
+                },
+            ]
+            return items
         } label: {
             Image(systemName: "captions.bubble")
-                .frame(width: 22, height: 22)
+                .font(.system(size: 16))
+                .frame(width: 24, height: 22)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Subtitles")
     }
 
     private var audioMenu: some View {
-        Menu {
+        PlayerMenuButton(help: "Audio Tracks") {
             if state.audioTracks.isEmpty {
-                Text("No alternate audio tracks")
-            } else {
-                ForEach(state.audioTracks) { track in
-                    trackToggle(
-                        track.displayName + (track.isExternal ? " — External" : ""),
-                        selected: track.isSelected
-                    ) {
-                        engine.setAudio(id: track.id)
-                    }
+                return [.note("No alternate audio tracks")]
+            }
+            return state.audioTracks.map { track in
+                .choice(
+                    track.displayName + (track.isExternal ? " — External" : ""),
+                    selected: track.isSelected
+                ) {
+                    engine.setAudio(id: track.id)
                 }
             }
         } label: {
             Image(systemName: "waveform")
                 .frame(width: 22, height: 22)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Audio Tracks")
-    }
-
-    /// Track pickers read as radio buttons, but menus draw their selection with a
-    /// checkmark, the same one the preference toggle below them gets.
-    private func trackToggle(
-        _ title: String,
-        selected: Bool,
-        select: @escaping () -> Void
-    ) -> some View {
-        Toggle(title, isOn: Binding(
-            get: { selected },
-            set: { if $0 { select() } }
-        ))
     }
 
     private func controlButton(

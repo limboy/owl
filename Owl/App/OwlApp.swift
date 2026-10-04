@@ -164,12 +164,12 @@ struct PlaybackCommands: Commands {
                 target?.appModel.togglePlayPause()
             }
 
-            Button("Seek Backward 5 Seconds") {
-                target?.appModel.seek(by: -5)
+            Button("Seek Backward 10 Seconds") {
+                target?.appModel.seek(by: -10)
             }
 
-            Button("Seek Forward 5 Seconds") {
-                target?.appModel.seek(by: 5)
+            Button("Seek Forward 10 Seconds") {
+                target?.appModel.seek(by: 10)
             }
 
             Button("Next Chapter") {

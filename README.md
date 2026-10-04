@@ -265,8 +265,8 @@ from a shell that exports it.
 | Shortcut | Action |
 | --- | --- |
 | `Space` | Play or pause |
-| `Left Arrow` | Seek backward 5 seconds |
-| `Right Arrow` | Seek forward 5 seconds |
+| `Left Arrow` | Seek backward 10 seconds |
+| `Right Arrow` | Seek forward 10 seconds |
 | `Up Arrow` | Increase volume by 5% |
 | `Down Arrow` | Decrease volume by 5% |
 | `Z` or `⌥Z` | Show the subtitles 0.25s earlier |

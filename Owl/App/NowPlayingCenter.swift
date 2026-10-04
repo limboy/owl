@@ -203,8 +203,8 @@ final class NowPlayingCenter {
         center.skipForwardCommand.isEnabled = true
         center.skipBackwardCommand.isEnabled = true
         center.changePlaybackPositionCommand.isEnabled = true
-        center.skipForwardCommand.preferredIntervals = [5]
-        center.skipBackwardCommand.preferredIntervals = [5]
+        center.skipForwardCommand.preferredIntervals = [10]
+        center.skipBackwardCommand.preferredIntervals = [10]
 
         center.togglePlayPauseCommand.addTarget { _ in
             Self.perform { $0.togglePlayPause() }
@@ -222,10 +222,10 @@ final class NowPlayingCenter {
             Self.perform { $0.playPrevious() }
         }
         center.skipForwardCommand.addTarget { _ in
-            Self.perform { $0.seek(by: 5) }
+            Self.perform { $0.seek(by: 10) }
         }
         center.skipBackwardCommand.addTarget { _ in
-            Self.perform { $0.seek(by: -5) }
+            Self.perform { $0.seek(by: -10) }
         }
         center.changePlaybackPositionCommand.addTarget { event in
             guard let event = event as? MPChangePlaybackPositionCommandEvent else {
