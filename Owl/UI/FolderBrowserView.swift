@@ -115,8 +115,6 @@ struct FolderBrowserView: View {
         nonmutating set { storedLayout = newValue.rawValue }
     }
 
-    private var showsContinueWatching: Bool { destination == .continueWatching }
-
     private var selectedRootID: UUID? {
         get {
             if case .folder(let id) = destination { return id }
@@ -132,9 +130,6 @@ struct FolderBrowserView: View {
 
     private var sidebar: some View {
         List(selection: $destination) {
-            Label("Continue Watching", systemImage: "play.circle")
-                .tag(BrowserDestination.continueWatching)
-
             Section("Folders") {
                 ForEach(library.roots) { root in
                     Label {
@@ -188,14 +183,7 @@ struct FolderBrowserView: View {
             ZStack {
                 Color(nsColor: .windowBackgroundColor)
 
-                if showsContinueWatching {
-                    ContinueWatchingView(
-                        appModel: appModel,
-                        isGrid: layout == .grid,
-                        hasMedia: hasMedia,
-                        usesOnlineMetadata: library.isMetadataSyncEnabled
-                    )
-                } else if library.roots.isEmpty {
+                if library.roots.isEmpty {
                     noFoldersState
                 } else if let selectedRoot, !selectedRoot.isAvailable {
                     unavailableState(selectedRoot)
@@ -245,7 +233,7 @@ struct FolderBrowserView: View {
 
     private var contentHeader: some View {
         HStack(spacing: 10) {
-            if !showsContinueWatching, library.navigationPath.count > 1 {
+            if library.navigationPath.count > 1 {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         library.goBack()
@@ -334,7 +322,6 @@ struct FolderBrowserView: View {
     }
 
     private var detailTitle: String {
-        if showsContinueWatching { return "Continue Watching" }
         guard selectedRoot != nil else { return "Library" }
         return library.currentTitle
     }
@@ -519,12 +506,8 @@ struct FolderBrowserView: View {
                         library.openFolder(folder)
                     }
                 }
-            } else if !appModel.progressStore.continueWatching.isEmpty {
-                destination = .continueWatching
             }
         }
-
-        if showsContinueWatching { return }
 
         if let pathRoot = library.navigationPath.first,
            let root = library.roots.first(where: {

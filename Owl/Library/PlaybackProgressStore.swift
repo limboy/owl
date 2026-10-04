@@ -8,15 +8,8 @@ struct PlaybackProgress: Codable, Equatable, Identifiable, Sendable {
     var isCompleted: Bool
     // Optional so progress written by earlier releases still decodes.
     var queueDirectory: URL?
-    var isHiddenFromContinueWatching: Bool?
 
     var id: URL { url }
-
-    var canContinueWatching: Bool {
-        queueDirectory != nil && !isCompleted && isHiddenFromContinueWatching != true
-            && position.isFinite && duration.isFinite
-            && position >= 30 && duration > position + 30
-    }
 
     var resumeTimeText: String {
         let seconds = Int(max(0, position.isFinite ? position : 0))
@@ -102,18 +95,6 @@ final class PlaybackProgressStore: ObservableObject {
         entriesByURL[url.standardizedFileURL]
     }
 
-    var continueWatching: [PlaybackProgress] {
-        // The lookup has already reconciled legacy spellings of the same URL.
-        // A history page must have one stable identity per file.
-        entriesByURL.values.filter(\.canContinueWatching).sorted { $0.lastPlayed > $1.lastPlayed }
-    }
-
-    func setHiddenFromContinueWatching(_ hidden: Bool, url: URL) {
-        guard var entry = progress(for: url) else { return }
-        entry.isHiddenFromContinueWatching = hidden
-        restoreEntry(entry)
-    }
-
     /// Opening through a different entry point changes where the file belongs,
     /// even before the player has loaded enough to save a new position.
     func setQueueDirectory(_ directory: URL?, for url: URL) {
@@ -123,7 +104,7 @@ final class PlaybackProgressStore: ObservableObject {
         restoreEntry(entry)
     }
 
-    /// Restores a removed or marked-watched item without changing its recency.
+    /// Puts back an entry as given, without changing its recency.
     func restoreEntry(_ entry: PlaybackProgress) {
         let normalizedURL = entry.url.standardizedFileURL
         entries.removeAll { $0.url.standardizedFileURL == normalizedURL }
@@ -146,8 +127,7 @@ final class PlaybackProgressStore: ObservableObject {
             duration: normalizedDuration,
             lastPlayed: Date(),
             isCompleted: completed,
-            queueDirectory: queueDirectory?.standardizedFileURL,
-            isHiddenFromContinueWatching: entriesByURL[normalizedURL]?.isHiddenFromContinueWatching
+            queueDirectory: queueDirectory?.standardizedFileURL
         )
 
         if let index = entries.firstIndex(where: { $0.url.standardizedFileURL == normalizedURL }) {
@@ -182,8 +162,7 @@ final class PlaybackProgressStore: ObservableObject {
             duration: knownDuration,
             lastPlayed: Date(),
             isCompleted: true,
-            queueDirectory: existing?.queueDirectory,
-            isHiddenFromContinueWatching: existing?.isHiddenFromContinueWatching
+            queueDirectory: existing?.queueDirectory
         )
 
         if let index = entries.firstIndex(where: { $0.url.standardizedFileURL == normalizedURL }) {

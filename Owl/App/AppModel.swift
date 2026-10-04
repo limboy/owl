@@ -449,7 +449,6 @@ final class AppModel: ObservableObject {
         NowPlayingCenter.shared.activate(self)
         videoView?.setVideoRenderingEnabled(true)
 
-        progressStore.setHiddenFromContinueWatching(false, url: url)
         let startAt = fromBeginning ? 0 : resumePosition(for: url)
         guard videoView?.isRendererReady == true else {
             pendingLoad = (url, startAt)
