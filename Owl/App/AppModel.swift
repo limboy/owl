@@ -167,6 +167,15 @@ final class AppModel: ObservableObject {
         loadVideo(next)
     }
 
+    /// Plays a video picked from the list of the queue that is playing,
+    /// without starting a new queue the way `play` does.
+    func playFromQueue(_ url: URL) {
+        guard url != playbackQueue.current, playbackQueue.jump(to: url) else { return }
+        saveCurrentProgress()
+        folderLibrary?.selectVideo(url)
+        loadVideo(url)
+    }
+
     /// Restarts the current file instead of moving back once there's enough
     /// played that "previous" more likely means "again" than "the last one" —
     /// the same threshold most players use before Previous stops chaining.

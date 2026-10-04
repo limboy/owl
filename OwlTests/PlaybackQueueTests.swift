@@ -34,6 +34,19 @@ final class PlaybackQueueTests: XCTestCase {
         XCTAssertEqual(queue.next(), videos[1], "Manual Next should still advance.")
     }
 
+    func testJumpKeepsShuffledOrder() {
+        let queue = PlaybackQueue(shuffleProvider: { Array($0.reversed()) })
+        let videos = makeVideos(["A.mp4", "B.mkv", "C.webm", "D.avi"])
+        queue.select(videos[0], from: videos)
+        queue.isShuffled = true
+
+        XCTAssertTrue(queue.jump(to: videos[2]))
+        XCTAssertEqual(queue.current, videos[2])
+        XCTAssertEqual(queue.next(), videos[1])
+        XCTAssertFalse(queue.jump(to: folder.appendingPathComponent("E.mp4")))
+        XCTAssertEqual(queue.current, videos[1])
+    }
+
     func testShuffleUsesInjectedOrderAndAddsNewVideos() {
         let queue = PlaybackQueue(shuffleProvider: { Array($0.reversed()) })
         let videos = makeVideos(["A.mp4", "B.mkv", "C.webm"])

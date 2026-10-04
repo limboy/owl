@@ -47,6 +47,10 @@ struct PlayerContainerView: View {
     /// keeps them up for as long as it rests there.
     @State private var isPointerOverControls = false
 
+    /// Whether the list of the queue is open from the title. The controls stay
+    /// up under it, since it hangs off the title and would go when it does.
+    @State private var isQueueListOpen = false
+
     init(
         appModel: AppModel,
         engine: MPVPlayerEngine,
@@ -110,6 +114,14 @@ struct PlayerContainerView: View {
                     .allowsHitTesting(false)
             }
 
+            if isQueueListOpen {
+                // Takes a click anywhere on the picture to put the list away,
+                // as a click outside a menu would.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { isQueueListOpen = false }
+            }
+
             VStack {
                 if let error = state.errorMessage {
                     errorBanner(error)
@@ -125,7 +137,8 @@ struct PlayerContainerView: View {
                         state: state,
                         showsTitle: showsTitle,
                         isSeeking: $isSeeking,
-                        seekValue: $seekValue
+                        seekValue: $seekValue,
+                        isQueueListOpen: $isQueueListOpen
                     )
                     .opacity(controlsVisible ? 1 : 0)
                     .offset(y: controlsVisible ? 0 : 14)
@@ -192,6 +205,14 @@ struct PlayerContainerView: View {
         }
         .onChange(of: state.isPaused) { _, isPaused in
             if isPaused {
+                hideTask?.cancel()
+                controlsVisible = true
+            } else {
+                scheduleControlsHide()
+            }
+        }
+        .onChange(of: isQueueListOpen) { _, isOpen in
+            if isOpen {
                 hideTask?.cancel()
                 controlsVisible = true
             } else {
@@ -453,10 +474,12 @@ struct PlayerContainerView: View {
 
     private func scheduleControlsHide() {
         hideTask?.cancel()
-        guard !state.isPaused, !isSeeking, openMenuCount == 0, !isPointerOverControls else { return }
+        guard !state.isPaused, !isSeeking, openMenuCount == 0, !isPointerOverControls, !isQueueListOpen
+        else { return }
         hideTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2.5))
-            guard !Task.isCancelled, !state.isPaused, !isSeeking, !isPointerOverControls else { return }
+            guard !Task.isCancelled, !state.isPaused, !isSeeking, !isPointerOverControls, !isQueueListOpen
+            else { return }
             controlsVisible = false
         }
     }
@@ -469,6 +492,9 @@ private struct PlayerControlsView: View {
     let showsTitle: Bool
     @Binding var isSeeking: Bool
     @Binding var seekValue: Double
+    @Binding var isQueueListOpen: Bool
+
+    @State private var isTitleHovered = false
 
     var body: some View {
         VStack(spacing: 6) {
@@ -480,6 +506,31 @@ private struct PlayerControlsView: View {
         .padding(.top, 10)
         .padding(.bottom, 8)
         .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
+        // A click anywhere on the bar puts the list away too, alongside
+        // whatever the click was for. Not the title's: that is its own toggle.
+        .contentShape(Rectangle())
+        .simultaneousGesture(TapGesture().onEnded {
+            if isQueueListOpen, !isTitleHovered {
+                isQueueListOpen = false
+            }
+        })
+        .overlay(alignment: .top) {
+            // Drawn over the picture rather than in a popover, so it is the
+            // same dark panel as the controls it opens from. It hangs from a
+            // line along the top of the bar, and so grows upwards from there.
+            Color.clear
+                .frame(height: 0)
+                .overlay(alignment: .bottom) {
+                    if isQueueListOpen, appModel.playbackQueue.videos.count > 1 {
+                        PlayerQueueList(appModel: appModel, queue: appModel.playbackQueue) {
+                            isQueueListOpen = false
+                        }
+                        .padding(.bottom, 8)
+                        .transition(.opacity.combined(with: .offset(y: 6)))
+                    }
+                }
+        }
+        .animation(.easeOut(duration: 0.15), value: isQueueListOpen)
     }
 
     /// Play/pause and the time on the left, the title in the middle, volume,
@@ -498,12 +549,7 @@ private struct PlayerControlsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsTitle, let title = state.currentTitle {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(title)
+                titleView(title)
             }
 
             HStack(spacing: 12) {
@@ -512,6 +558,42 @@ private struct PlayerControlsView: View {
             }
             .fixedSize()
             .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    private func titleText(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .truncationMode(.middle)
+    }
+
+    /// The name of the video. Playing through a folder, it is also the way
+    /// into the rest of the folder: a click lists the videos around this one,
+    /// with shuffle and repeat beside them.
+    @ViewBuilder
+    private func titleView(_ title: String) -> some View {
+        if appModel.playbackQueue.videos.count > 1 {
+            Button {
+                isQueueListOpen.toggle()
+            } label: {
+                titleText(title)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(isTitleHovered || isQueueListOpen ? 0.14 : 0))
+                    }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isTitleHovered = $0 }
+            .animation(.easeOut(duration: 0.12), value: isTitleHovered)
+            .help(title)
+        } else {
+            titleText(title)
+                .help(title)
         }
     }
 
@@ -696,6 +778,167 @@ private struct PlayerControlsView: View {
         }
         .buttonStyle(.plain)
         .help(help)
+    }
+}
+
+/// The videos of the queue that is playing, opened from the title, with the
+/// queue's shuffle and repeat at the top.
+///
+/// Listed in the folder's own order rather than the shuffled one: it is for
+/// finding a video, and a folder is found by its order.
+private struct PlayerQueueList: View {
+    @ObservedObject var appModel: AppModel
+    @ObservedObject var queue: PlaybackQueue
+    let onPick: () -> Void
+
+    @State private var hoveredVideo: URL?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(height: 0.5)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(Array(queue.videos.enumerated()), id: \.element) { index, video in
+                            row(video, number: index + 1)
+                                .id(video)
+                        }
+                    }
+                    .padding(6)
+                }
+                .onAppear {
+                    if let current = queue.current {
+                        proxy.scrollTo(current, anchor: .center)
+                    }
+                }
+            }
+        }
+        .frame(width: 340, height: listHeight)
+        .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
+    }
+
+    /// Tall enough for the whole queue, up to a point.
+    private var listHeight: CGFloat {
+        let rows = CGFloat(min(queue.videos.count, 10))
+        return 44 + 12 + rows * 30
+    }
+
+    private var header: some View {
+        HStack(spacing: 6) {
+            Text(positionText)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .monospacedDigit()
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            toggleButton(
+                "shuffle",
+                isOn: queue.isShuffled,
+                help: queue.isShuffled ? "Shuffle On" : "Shuffle Off"
+            ) {
+                queue.isShuffled.toggle()
+            }
+
+            toggleButton(
+                queue.repeatMode.symbolName,
+                isOn: queue.repeatMode != .off,
+                help: queue.repeatMode.label
+            ) {
+                queue.cycleRepeatMode()
+            }
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .frame(height: 44)
+    }
+
+    /// "3 of 12", or just the count before anything in it is playing.
+    private var positionText: String {
+        if let current = queue.current, let index = queue.videos.firstIndex(of: current) {
+            return "\(index + 1) of \(queue.videos.count)"
+        }
+        return "\(queue.videos.count) Videos"
+    }
+
+    private func toggleButton(
+        _ symbol: String,
+        isOn: Bool,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(isOn ? 1 : 0.45))
+                .frame(width: 28, height: 26)
+                .background {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(isOn ? 0.14 : 0))
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+
+    private func row(_ video: URL, number: Int) -> some View {
+        let isCurrent = video == queue.current
+        return Button {
+            appModel.playFromQueue(video)
+            onPick()
+        } label: {
+            HStack(spacing: 10) {
+                Group {
+                    if isCurrent {
+                        Image(systemName: "speaker.wave.2.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white)
+                    } else {
+                        Text("\(number)")
+                            .font(.caption)
+                            .foregroundStyle(Color.white.opacity(0.5))
+                            .monospacedDigit()
+                    }
+                }
+                .frame(width: 24, alignment: .trailing)
+
+                Text(video.deletingPathExtension().lastPathComponent)
+                    .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
+                    .foregroundStyle(Color.white.opacity(isCurrent ? 1 : 0.8))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 6)
+            .frame(height: 28)
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(rowFill(isCurrent: isCurrent, isHovered: hoveredVideo == video))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isOver in
+            if isOver {
+                hoveredVideo = video
+            } else if hoveredVideo == video {
+                hoveredVideo = nil
+            }
+        }
+        .help(video.lastPathComponent)
+    }
+
+    /// The same white wash as the title's hover: lighter for the pointer,
+    /// fuller for the video that is playing.
+    private func rowFill(isCurrent: Bool, isHovered: Bool) -> Color {
+        Color.white.opacity(isCurrent ? 0.14 : isHovered ? 0.08 : 0)
     }
 }
 

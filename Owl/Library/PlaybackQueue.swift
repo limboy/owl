@@ -70,6 +70,14 @@ final class PlaybackQueue: ObservableObject {
         }
     }
 
+    /// Moves straight to a video picked from the queue, keeping the shuffled
+    /// order as it is so that what follows it is still what was dealt.
+    func jump(to url: URL) -> Bool {
+        guard videos.contains(url) else { return false }
+        current = url
+        return true
+    }
+
     func clear() {
         videos = []
         current = nil
