@@ -497,6 +497,18 @@ final class MPVPlayerEngine: @unchecked Sendable {
         setDouble(property: "sub-scale", value: scale)
     }
 
+    /// Has mpv map the picture into a display's gamut, given as one of mpv's
+    /// primaries names, or leave the picture as BT.709 given nothing. See
+    /// `DisplayGamut`.
+    ///
+    /// The transfer curve is pinned to BT.1886 alongside, which is what mpv
+    /// assumes of a display it knows nothing about: the gamut changes, and the
+    /// brightness of everything in it stays as it was.
+    func setDisplayPrimaries(_ primaries: String?) {
+        command(["set", "target-trc", primaries == nil ? "auto" : "bt.1886"])
+        command(["set", "target-prim", primaries ?? "auto"])
+    }
+
     func setAudio(id: Int64?) {
         command(["set", "aid", id.map(String.init) ?? "no"])
     }

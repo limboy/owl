@@ -308,6 +308,11 @@ final class OwlVideoView: NSOpenGLView {
     private var renderUpdateContext: UnsafeMutableRawPointer?
     private var windowObservers: [NSObjectProtocol] = []
 
+    /// The gamut mpv was last given, so that a window that keeps its screen
+    /// does not have mpv rebuild its shaders for nothing. Doubly optional:
+    /// nil until the first screen, then whatever that screen turned out to be.
+    private var appliedPrimaries: String??
+
 
     init(engine: MPVPlayerEngine) {
         self.engine = engine
@@ -452,6 +457,7 @@ final class OwlVideoView: NSOpenGLView {
         openGLContext?.lock()
         openGLContext?.update()
         openGLContext?.unlock()
+        applyDisplayGamut()
 
         let occlusionObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didChangeOcclusionStateNotification,
@@ -478,10 +484,30 @@ final class OwlVideoView: NSOpenGLView {
                 self.openGLContext?.lock()
                 self.openGLContext?.update()
                 self.openGLContext?.unlock()
+                self.applyDisplayGamut()
                 self.needsDisplay = true
             }
         }
-        windowObservers = [occlusionObserver, screenObserver]
+        // The same screen with a different colour profile, chosen in Displays
+        // settings.
+        let profileObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeScreenProfileNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.applyDisplayGamut()
+            }
+        }
+        windowObservers = [occlusionObserver, screenObserver, profileObserver]
+    }
+
+    /// Tells mpv the gamut of the screen the window is on. See `DisplayGamut`.
+    private func applyDisplayGamut() {
+        let primaries = DisplayGamut.mpvPrimaries(for: window?.screen?.colorSpace)
+        guard appliedPrimaries != .some(primaries) else { return }
+        appliedPrimaries = .some(primaries)
+        engine.setDisplayPrimaries(primaries)
     }
 
     private func clearWindowObservers() {

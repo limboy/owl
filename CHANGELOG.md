@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Fix oversaturated colours on wide-gamut displays such as a MacBook Pro's: videos now match QuickTime's colours, and follow a window moved to another display
 - Show what changed over the picture when the volume, speed or position is changed from the keyboard, the menu bar or the media keys, and press `O` to see where playback is
 - Keep the Now Playing panel in step at every speed and after every seek, show the video's artwork there, and fix it reporting a paused video as playing
 
