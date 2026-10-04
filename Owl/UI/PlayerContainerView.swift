@@ -47,6 +47,10 @@ struct PlayerContainerView: View {
     /// survive the submenu closing.
     @State private var openMenuCount = 0
 
+    /// Whether the pointer is over the control bar or the close button, which
+    /// keeps them up for as long as it rests there.
+    @State private var isPointerOverControls = false
+
     init(
         appModel: AppModel,
         engine: MPVPlayerEngine,
@@ -133,6 +137,7 @@ struct PlayerContainerView: View {
                     .opacity(controlsVisible ? 1 : 0)
                     .offset(y: controlsVisible ? 0 : 14)
                     .allowsHitTesting(controlsVisible)
+                    .onHover(perform: pointerOverControlsChanged)
                     .padding(.horizontal, 18)
                     .padding(.bottom, 14)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -162,6 +167,7 @@ struct PlayerContainerView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Close Video")
+                .onHover(perform: pointerOverControlsChanged)
                 .accessibilityLabel("Close Video")
                 .opacity(controlsVisible ? 1 : 0)
                 .allowsHitTesting(controlsVisible)
@@ -424,6 +430,16 @@ struct PlayerContainerView: View {
         }
     }
 
+    private func pointerOverControlsChanged(_ isOver: Bool) {
+        isPointerOverControls = isOver
+        if isOver {
+            hideTask?.cancel()
+            controlsVisible = true
+        } else {
+            scheduleControlsHide()
+        }
+    }
+
     private func revealControls() {
         controlsVisible = true
         scheduleControlsHide()
@@ -444,10 +460,10 @@ struct PlayerContainerView: View {
 
     private func scheduleControlsHide() {
         hideTask?.cancel()
-        guard !state.isPaused, !isSeeking, openMenuCount == 0 else { return }
+        guard !state.isPaused, !isSeeking, openMenuCount == 0, !isPointerOverControls else { return }
         hideTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2.5))
-            guard !Task.isCancelled, !state.isPaused, !isSeeking else { return }
+            guard !Task.isCancelled, !state.isPaused, !isSeeking, !isPointerOverControls else { return }
             controlsVisible = false
         }
     }
