@@ -128,6 +128,36 @@ final class MPVPlayerEngineTests: XCTestCase {
         }
     }
 
+    /// Live Text reads the picture back out of the renderer, and lays its
+    /// findings over the view on the strength of the picture being the right
+    /// way up and the view's own size.
+    func testASnapshotIsThePictureTheRightWayUpAtTheViewsSize() async throws {
+        let halves = "color=c=red:s=320x90:r=10[top];color=c=blue:s=320x90:r=10[bottom];[top][bottom]vstack"
+        try await withVideoSurface(picture: halves) { engine, view, _ in
+            engine.setPaused(true)
+            try await waitUntil { engine.state.isPaused }
+            try await Task.sleep(for: .milliseconds(200))
+
+            let snapshot = await view.snapshot()
+            let image = try XCTUnwrap(snapshot)
+            let scale = view.window?.backingScaleFactor ?? 1
+            XCTAssertEqual(image.width, Int(view.bounds.width * scale))
+            XCTAssertEqual(image.height, Int(view.bounds.height * scale))
+
+            let bitmap = NSBitmapImageRep(cgImage: image)
+            let top = try XCTUnwrap(bitmap.colorAt(x: image.width / 2, y: image.height / 4))
+            let bottom = try XCTUnwrap(bitmap.colorAt(x: image.width / 2, y: image.height * 3 / 4))
+            XCTAssertGreaterThan(top.redComponent, top.blueComponent, "the top half should be red")
+            XCTAssertGreaterThan(bottom.blueComponent, bottom.redComponent, "the bottom half should be blue")
+
+            // Taking the picture must not leave the view without one.
+            let drawn = view.renderedFrameCount
+            view.needsDisplay = true
+            try await waitUntil { view.renderedFrameCount > drawn }
+            XCTAssertGreaterThan(view.renderedFrameCount, drawn)
+        }
+    }
+
     func testAnimatedResizeRestoresPlaybackSynchronizationAfterNestedResize() async throws {
         try await withVideoSurface { engine, view, window in
             let context = try XCTUnwrap(view.openGLContext)
@@ -184,10 +214,16 @@ final class MPVPlayerEngineTests: XCTestCase {
         frameRate: Int = 10,
         duration: Int = 10,
         includesAudio: Bool = false,
+        picture: String? = nil,
         _ body: (MPVPlayerEngine, OwlVideoView, NSWindow) async throws -> Void
     ) async throws {
         let engine = try makeEngine()
-        let sample = try makeSample(frameRate: frameRate, duration: duration, includesAudio: includesAudio)
+        let sample = try makeSample(
+            frameRate: frameRate,
+            duration: duration,
+            includesAudio: includesAudio,
+            picture: picture
+        )
         let view = OwlVideoView(engine: engine)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 180),
@@ -466,6 +502,7 @@ final class MPVPlayerEngineTests: XCTestCase {
         frameRate: Int = 10,
         duration: Int = 10,
         includesAudio: Bool = false,
+        picture: String? = nil,
         chapters: [(start: Int, title: String?)] = []
     ) throws -> URL {
         guard case .ffmpeg(let ffmpeg)? = ExternalThumbnailRenderer.locateTool() else {
@@ -476,7 +513,7 @@ final class MPVPlayerEngineTests: XCTestCase {
             .appendingPathExtension(audioOnly ? "m4a" : "mp4")
         let source = audioOnly
             ? ["-i", "sine=frequency=440"]
-            : ["-i", "testsrc=size=320x180:rate=\(frameRate)"]
+            : ["-i", picture ?? "testsrc=size=320x180:rate=\(frameRate)"]
         let audioInput = includesAudio && !audioOnly
             ? ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
             : []

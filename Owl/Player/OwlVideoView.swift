@@ -229,6 +229,106 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
         }
     }
 
+    /// The picture as it stands, drawn once more into a framebuffer of its
+    /// own at the size it is on screen and read back, black bars and subtitles
+    /// included: exactly what is in the view, so whatever is laid over the
+    /// view lines up with it point for point. Nil when there is nothing drawn
+    /// to take.
+    ///
+    /// Not the frame on screen, which a double-buffered surface gives no
+    /// dependable way to read once it has been swapped.
+    func snapshot(completion: @escaping @Sendable (CGImage?) -> Void) {
+        queue.async { [self] in
+            guard let (context, size) = stateLock.withLock({ () -> (NSOpenGLContext, (width: Int, height: Int))? in
+                guard isActive, isVideoRenderingEnabled, let context,
+                      presentedSize.width > 0, presentedSize.height > 0 else { return nil }
+                return (context, presentedSize)
+            }) else {
+                completion(nil)
+                return
+            }
+
+            context.lock()
+            context.makeCurrentContext()
+            let image = Self.readPicture(engine: engine, width: size.width, height: size.height)
+            NSOpenGLContext.clearCurrentContext()
+            context.unlock()
+            // The draw above took mpv's word that a frame was waiting, which
+            // the next ordinary render would otherwise have acted on.
+            requestRender(forceRedraw: true)
+            completion(image)
+        }
+    }
+
+    /// With the context locked and current.
+    private static func readPicture(engine: MPVPlayerEngine, width: Int, height: Int) -> CGImage? {
+        var previousFramebuffer: GLint = 0
+        glGetIntegerv(GLenum(GL_DRAW_FRAMEBUFFER_BINDING), &previousFramebuffer)
+        var texture: GLuint = 0
+        var framebuffer: GLuint = 0
+        glGenTextures(1, &texture)
+        glGenFramebuffers(1, &framebuffer)
+        defer {
+            glBindFramebuffer(GLenum(GL_FRAMEBUFFER), GLuint(previousFramebuffer))
+            glDeleteFramebuffers(1, &framebuffer)
+            glDeleteTextures(1, &texture)
+        }
+
+        glBindTexture(GLenum(GL_TEXTURE_2D), texture)
+        glTexImage2D(
+            GLenum(GL_TEXTURE_2D), 0, GL_RGBA8,
+            GLsizei(width), GLsizei(height), 0,
+            GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), nil
+        )
+        glBindTexture(GLenum(GL_TEXTURE_2D), 0)
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), framebuffer)
+        glFramebufferTexture2D(
+            GLenum(GL_FRAMEBUFFER), GLenum(GL_COLOR_ATTACHMENT0),
+            GLenum(GL_TEXTURE_2D), texture, 0
+        )
+        guard glCheckFramebufferStatus(GLenum(GL_FRAMEBUFFER)) == GLenum(GL_FRAMEBUFFER_COMPLETE) else {
+            return nil
+        }
+
+        // Unflipped: mpv then writes the top row first, which is the order
+        // glReadPixels hands rows back in and the order a CGImage expects.
+        let result = mvp_mpv_render(
+            engine.rawHandle, GLint(framebuffer), Int32(width), Int32(height), false, true
+        )
+        guard result > 0 else { return nil }
+
+        // mpv leaves its own choice of framebuffer bound, and reading from it
+        // reads the window's last frame, upside down, instead of this one.
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), framebuffer)
+
+        let bytesPerRow = width * 4
+        var pixels = Data(count: bytesPerRow * height)
+        pixels.withUnsafeMutableBytes { buffer in
+            glReadPixels(
+                0, 0, GLsizei(width), GLsizei(height),
+                GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), buffer.baseAddress
+            )
+        }
+        guard let provider = CGDataProvider(data: pixels as CFData),
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+        else {
+            return nil
+        }
+        return CGImage(
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        )
+    }
+
     private func clearSurface() {
         guard let context = stateLock.withLock({
             isActive && !isVideoRenderingEnabled ? self.context : nil
@@ -287,6 +387,16 @@ final class OwlVideoView: NSOpenGLView {
     }
 
     var renderedFrameCount: UInt64 { renderWorker.renderedFrameCount }
+
+    /// The picture as it is drawn in this view right now. See
+    /// `MVOpenGLRenderWorker.snapshot`.
+    func snapshot() async -> CGImage? {
+        await withCheckedContinuation { continuation in
+            renderWorker.snapshot { image in
+                continuation.resume(returning: image)
+            }
+        }
+    }
 
     /// Whether mpv has a render context to open files against, and the one
     /// notification of it being made.

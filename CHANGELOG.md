@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Add Live Text to a paused video: text in the picture, subtitles included, can be selected, copied, translated and looked up
 - Add chapters: marks on the timeline where each begins, Next and Previous Chapter in the Playback menu and on Page Down and Page Up, and the chapter in the Now Playing panel
 - Fix oversaturated colours on wide-gamut displays such as a MacBook Pro's: videos now match QuickTime's colours, and follow a window moved to another display
 - Show what changed over the picture when the volume, speed or position is changed from the keyboard, the menu bar or the media keys, and press `O` to see where playback is

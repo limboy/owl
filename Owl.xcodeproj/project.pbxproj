@@ -16,6 +16,7 @@
 		0F1FE9B21281C99684FE0C7E /* PlaybackQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74C76B9868D82BEC6FE6B098 /* PlaybackQueue.swift */; };
 		623A4805533343809E5DA024 /* DisplayGamutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B4E25C1B5674CDFA1FE9F38 /* DisplayGamutTests.swift */; };
 		C03FEF1313FB4C8396837D9B /* ChapterNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D00F4032F35476E81FF4FE6 /* ChapterNavigationTests.swift */; };
+		685B2A1DB5CD49DFBC980459 /* LiveTextOverlayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F50F13A5F0348DD8A341441 /* LiveTextOverlayTests.swift */; };
 		F80AE9A3CFE94D18A4F46E92 /* PlayerNoticeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D59AFF9947EC4FD78D29A192 /* PlayerNoticeTests.swift */; };
 		154F47E287B4363ECFC3499F /* PlayerKeyRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B4FFFA39F2DDEE28712765 /* PlayerKeyRoutingTests.swift */; };
 		157464D8985821F6749440D8 /* PlayerNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A24122838F0E7136BABE5F7 /* PlayerNotice.swift */; };
@@ -26,6 +27,7 @@
 		23574F0D69723012DFA10974 /* OnlineMetadataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ED909571D9C52E345E1ACC8 /* OnlineMetadataService.swift */; };
 		29BEBB83BD55FEBCEA6343DB /* WindowFrameAutosave.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40494D790102331CDA1DFA0A /* WindowFrameAutosave.swift */; };
 		2A25D9226797832617777187 /* FullScreenTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84337DE90BFA1B9260252216 /* FullScreenTransition.swift */; };
+		4E2A36CD84A64332AE8EA2F3 /* LiveTextOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4274BD886C44653B7F5636B /* LiveTextOverlay.swift */; };
 		3042AB12579F72C816A04A10 /* WindowTitleHidden.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA1F1304BD67FEF2F43DB03 /* WindowTitleHidden.swift */; };
 		3087D0228911A1CA336730B4 /* MPVPlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C69E2716A6927AAE5AB0FC30 /* MPVPlayerEngine.swift */; };
 		3794109AEE0FD8A669674436 /* PlaybackSleepPreventionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 093418A852F12FF5F2C2A376 /* PlaybackSleepPreventionTests.swift */; };
@@ -173,6 +175,7 @@
 		521442101CFC2609B330FADD /* FolderBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderBrowserView.swift; sourceTree = "<group>"; };
 		8B4E25C1B5674CDFA1FE9F38 /* DisplayGamutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayGamutTests.swift; sourceTree = "<group>"; };
 		7D00F4032F35476E81FF4FE6 /* ChapterNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChapterNavigationTests.swift; sourceTree = "<group>"; };
+		5F50F13A5F0348DD8A341441 /* LiveTextOverlayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTextOverlayTests.swift; sourceTree = "<group>"; };
 		D59AFF9947EC4FD78D29A192 /* PlayerNoticeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerNoticeTests.swift; sourceTree = "<group>"; };
 		53B4FFFA39F2DDEE28712765 /* PlayerKeyRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerKeyRoutingTests.swift; sourceTree = "<group>"; };
 		53C32D670BE52750EF7D188B /* TimelinePreviewScrubber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelinePreviewScrubber.swift; sourceTree = "<group>"; };
@@ -206,6 +209,7 @@
 		B2649A932CAD63107D09B2D9 /* Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = "<group>"; };
 		B8C1E88E7092374764AEB3C8 /* MediaThumbnailProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaThumbnailProviderTests.swift; sourceTree = "<group>"; };
 		BB0D9DCB9D710E27DC8929AB /* SubtitlePreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitlePreference.swift; sourceTree = "<group>"; };
+		A4274BD886C44653B7F5636B /* LiveTextOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTextOverlay.swift; sourceTree = "<group>"; };
 		BDA1F1304BD67FEF2F43DB03 /* WindowTitleHidden.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowTitleHidden.swift; sourceTree = "<group>"; };
 		BDB00DF8F6F5E1F694F001F8 /* VideoTitleGuess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTitleGuess.swift; sourceTree = "<group>"; };
 		C01ADE4BFA5EA9A7DDB690A9 /* RecentFilesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFilesTests.swift; sourceTree = "<group>"; };
@@ -328,6 +332,7 @@
 				093418A852F12FF5F2C2A376 /* PlaybackSleepPreventionTests.swift */,
 				8B4E25C1B5674CDFA1FE9F38 /* DisplayGamutTests.swift */,
 				7D00F4032F35476E81FF4FE6 /* ChapterNavigationTests.swift */,
+				5F50F13A5F0348DD8A341441 /* LiveTextOverlayTests.swift */,
 				D59AFF9947EC4FD78D29A192 /* PlayerNoticeTests.swift */,
 				53B4FFFA39F2DDEE28712765 /* PlayerKeyRoutingTests.swift */,
 				40633D16992B312A728DCD19 /* PlayerStateTests.swift */,
@@ -366,6 +371,7 @@
 				7E9A82848C0D9F83D3630766 /* PlayerKeyboardMonitor.swift */,
 				53C32D670BE52750EF7D188B /* TimelinePreviewScrubber.swift */,
 				40494D790102331CDA1DFA0A /* WindowFrameAutosave.swift */,
+				A4274BD886C44653B7F5636B /* LiveTextOverlay.swift */,
 				BDA1F1304BD67FEF2F43DB03 /* WindowTitleHidden.swift */,
 			);
 			path = UI;
@@ -596,6 +602,7 @@
 				3794109AEE0FD8A669674436 /* PlaybackSleepPreventionTests.swift in Sources */,
 				623A4805533343809E5DA024 /* DisplayGamutTests.swift in Sources */,
 				C03FEF1313FB4C8396837D9B /* ChapterNavigationTests.swift in Sources */,
+				685B2A1DB5CD49DFBC980459 /* LiveTextOverlayTests.swift in Sources */,
 				F80AE9A3CFE94D18A4F46E92 /* PlayerNoticeTests.swift in Sources */,
 				154F47E287B4363ECFC3499F /* PlayerKeyRoutingTests.swift in Sources */,
 				D37A917110D804F2977D2DE5 /* PlayerStateTests.swift in Sources */,
@@ -661,6 +668,7 @@
 				3813DF4D2DC9B9A0E243BB1B /* VideoSurface.swift in Sources */,
 				981C3366C27B3CB88C80E8C0 /* VideoTitleGuess.swift in Sources */,
 				29BEBB83BD55FEBCEA6343DB /* WindowFrameAutosave.swift in Sources */,
+				4E2A36CD84A64332AE8EA2F3 /* LiveTextOverlay.swift in Sources */,
 				3042AB12579F72C816A04A10 /* WindowTitleHidden.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -73,6 +73,21 @@ struct PlayerContainerView: View {
             VideoSurface(view: videoView, isActive: isVideoSurfaceActive)
                 .contentShape(Rectangle())
 
+            LiveTextOverlay(
+                videoView: videoView,
+                isActive: isVideoSurfaceActive
+                    && state.hasMedia
+                    && state.isPaused
+                    && !state.isLoading
+                    && state.errorMessage == nil,
+                frame: LiveTextFrame(
+                    url: state.currentURL,
+                    time: state.currentTime,
+                    subtitleID: state.selectedSubtitleID,
+                    subtitleDelay: state.subtitleDelay
+                )
+            )
+
             if !state.hasMedia {
                 VStack(spacing: 12) {
                     Image(systemName: "play.rectangle")
