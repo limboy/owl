@@ -191,18 +191,36 @@ final class AppModel: ObservableObject {
     func seek(by seconds: Double) {
         guard playerState.hasMedia else { return }
         engine?.seek(by: seconds)
+        playerState.announce(.position)
     }
 
+    /// Says where playback is, for the key that asks without touching anything.
+    func showPosition() {
+        guard playerState.hasMedia else { return }
+        playerState.announce(.position)
+    }
+
+    /// Applied to `playerState` at once rather than on mpv's report of it, the
+    /// way the subtitle delay is: a held key sends its next step before mpv has
+    /// answered the last, and stepping from the old level would stall there.
     func changeVolume(by amount: Double) {
-        engine?.setVolume(playerState.volume + amount)
+        guard let engine else { return }
+        let volume = MPVPlayerEngine.volumeRange.clamped(playerState.volume + amount)
+        playerState.volume = volume
+        engine.setVolume(volume)
+        playerState.announce(.volume(volume, isMuted: playerState.isMuted))
     }
 
     func setSpeed(_ speed: Double) {
-        engine?.setSpeed(speed)
+        guard let engine else { return }
+        let speed = MPVPlayerEngine.speedRange.clamped(speed)
+        playerState.speed = speed
+        engine.setSpeed(speed)
+        playerState.announce(.speed(speed))
     }
 
     func changeSpeed(by amount: Double) {
-        engine?.setSpeed(playerState.speed + amount)
+        setSpeed(playerState.speed + amount)
     }
 
     func changeSubtitleDelay(by seconds: Double) {
@@ -219,7 +237,7 @@ final class AppModel: ObservableObject {
     /// confirms the same value.
     private func setSubtitleDelay(_ seconds: Double) {
         playerState.subtitleDelay = seconds
-        playerState.announce(.delay(seconds))
+        playerState.announce(.subtitleDelay(seconds))
         engine?.setSubtitleDelay(seconds)
         guard let url = playerState.currentURL else { return }
         subtitleStore.recordDelay(url: url, delaySeconds: seconds)
@@ -238,7 +256,7 @@ final class AppModel: ObservableObject {
     private func setSubtitleScale(_ scale: Double) {
         SubtitlePreference.scale = scale
         let applied = SubtitlePreference.scale
-        playerState.announce(.scale(applied))
+        playerState.announce(.subtitleScale(applied))
         engine?.setSubtitleScale(applied)
     }
 
@@ -263,7 +281,7 @@ final class AppModel: ObservableObject {
         if let language = selection.language {
             SubtitlePreference.preferredLanguage = language
         }
-        playerState.announce(.track(track?.displayName ?? "Off"))
+        playerState.announce(.subtitleTrack(track?.displayName ?? "Off"))
     }
 
     /// Steps through the file's subtitle tracks and then off, for the key that
@@ -272,7 +290,7 @@ final class AppModel: ObservableObject {
         guard playerState.hasMedia else { return }
         guard !playerState.subtitles.isEmpty else {
             // Silence would read as a key that does nothing.
-            playerState.announce(.track("None available"))
+            playerState.announce(.subtitleTrack("None available"))
             return
         }
         selectSubtitle(
@@ -304,7 +322,7 @@ final class AppModel: ObservableObject {
         if let current = playerState.currentURL {
             subtitleStore.recordSelection(url: current, selection: .external(url: url))
         }
-        playerState.announce(.track(url.lastPathComponent))
+        playerState.announce(.subtitleTrack(url.lastPathComponent))
     }
 
     /// Restores how this file was last watched: the delay it needed, and the
@@ -476,7 +494,6 @@ final class AppModel: ObservableObject {
             .throttle(for: .seconds(5), scheduler: RunLoop.main, latest: true)
             .sink { [weak self] _, _, _ in
                 self?.saveCurrentProgress()
-                self?.updateNowPlaying()
             }
             .store(in: &cancellables)
 
@@ -488,11 +505,23 @@ final class AppModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        playerState.$isPaused
+        // Delivered on the next turn of the main queue, after the new value
+        // has been stored — see the note below — because the panel is built
+        // by reading playerState, not from the value handed to the sink.
+        Publishers.Merge3(
+            playerState.$isPaused.map { _ in () },
+            playerState.$speed.map { _ in () },
+            playerState.$duration.map { _ in () }
+        )
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.updateNowPlaying() }
             .store(in: &cancellables)
-        playerState.$volume
-            .sink { [weak self] _ in self?.updateNowPlaying() }
+        playerState.$currentTime
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                NowPlayingCenter.shared.positionChanged(from: self)
+            }
             .store(in: &cancellables)
 
         // The published values, not the properties: @Published fires before the

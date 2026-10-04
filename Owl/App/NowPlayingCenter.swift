@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import MediaPlayer
 
 /// The one place the media keys and the system's Now Playing panel are wired to,
@@ -44,6 +44,23 @@ final class NowPlayingCenter {
         clear()
     }
 
+    /// What was last handed to the system, so that a position mpv reports can
+    /// be checked against where the panel believes playback has got to.
+    private var published: (url: URL, elapsed: Double, rate: Double, at: Date)?
+
+    /// The artwork for the file being played, once it has been found, and the
+    /// file it is being looked for on behalf of.
+    private var artwork: (url: URL, artwork: MPMediaItemArtwork)?
+    private var artworkRequestURL: URL?
+    private var artworkTask: Task<Void, Never>?
+
+    /// How far the panel's own clock may run from the player's before it is
+    /// corrected. The panel moves its slider on by itself from the elapsed time
+    /// and the rate it was last given, so a position only needs sending again
+    /// when something other than playing has moved it: a seek, a stall, a
+    /// resume.
+    private static let positionTolerance: Double = 1.5
+
     /// Publishes what `model` is playing, or does nothing at all if some other
     /// window is the one the system is following.
     func update(from model: AppModel) {
@@ -54,25 +71,112 @@ final class NowPlayingCenter {
         }
 
         let state = model.playerState
+        // The rate is what the panel advances its slider by between updates.
+        // A paused player has to say 0, or the slider runs on without it; a
+        // player at 2x has to say 2, or the slider falls behind and jumps back
+        // into place every time it is corrected.
+        let rate = state.isPaused ? 0 : state.speed
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: state.currentTitle ?? url.lastPathComponent,
             MPMediaItemPropertyAssetURL: url,
+            MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.video.rawValue,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: state.currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate: state.isPaused ? 0 : 1
+            MPNowPlayingInfoPropertyPlaybackRate: rate,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0
         ]
         if state.duration > 0 {
             info[MPMediaItemPropertyPlaybackDuration] = state.duration
         }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-        MPNowPlayingInfoCenter.default().playbackState = state.isPaused ? .paused : .playing
+        let queue = model.playbackQueue.videos
+        if queue.count > 1, let index = queue.firstIndex(of: url) {
+            info[MPNowPlayingInfoPropertyPlaybackQueueIndex] = index
+            info[MPNowPlayingInfoPropertyPlaybackQueueCount] = queue.count
+        }
+        if let artwork, artwork.url == url {
+            info[MPMediaItemPropertyArtwork] = artwork.artwork
+        } else {
+            loadArtwork(for: url, from: model)
+        }
+
+        let center = MPNowPlayingInfoCenter.default()
+        center.nowPlayingInfo = info
+        // A file that opens paused is not taken as something playing at all:
+        // the panel goes back to whatever app played last, and the media keys
+        // with it. Saying it is playing for a moment first, as IINA does, is
+        // what keeps the panel on this one.
+        if state.isPaused, published?.url != url {
+            center.playbackState = .playing
+        }
+        center.playbackState = state.isPaused ? .paused : .playing
+        published = (url, state.currentTime, rate, Date())
 
         let commandCenter = MPRemoteCommandCenter.shared()
-        let hasQueue = model.playbackQueue.videos.count > 1
+        let hasQueue = queue.count > 1
         commandCenter.nextTrackCommand.isEnabled = hasQueue
         commandCenter.previousTrackCommand.isEnabled = hasQueue
     }
 
+    /// Tells the panel about a position that is not where its own clock says
+    /// playback should be, and says nothing about one that is.
+    ///
+    /// Called on every position mpv reports. Ordinary playback stays inside
+    /// the tolerance and costs a subtraction; a seek, from the keys or the
+    /// timeline or the panel itself, lands outside it and is published at once
+    /// rather than whenever the next periodic update comes round.
+    func positionChanged(from model: AppModel) {
+        guard activeModel === model, let published else { return }
+        let state = model.playerState
+        guard state.currentURL == published.url else { return }
+        let expected = published.elapsed + Date().timeIntervalSince(published.at) * published.rate
+        guard abs(state.currentTime - expected) > Self.positionTolerance else { return }
+        update(from: model)
+    }
+
+    /// Finds a picture for the panel: the catalogue's artwork where the folder
+    /// has been matched against it, which is what the browser shows for the
+    /// file too, and otherwise the same frame the browser uses as its cover.
+    ///
+    /// Asked once per file. The panel goes without until it arrives, rather
+    /// than keeping the last file's picture beside this one's name.
+    private func loadArtwork(for url: URL, from model: AppModel) {
+        guard artworkRequestURL != url else { return }
+        artworkRequestURL = url
+        artworkTask?.cancel()
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        let artworkPath = model.folderLibrary?.onlineMetadata(for: url)?.artworkPath
+        artworkTask = Task { [weak self, weak model] in
+            var image: NSImage?
+            if let artworkPath {
+                image = await OnlineArtworkProvider.shared.image(forArtworkPath: artworkPath)
+            }
+            if image == nil {
+                image = await MediaThumbnailProvider.shared.coverImage(for: url)
+            }
+            guard !Task.isCancelled, let self, let image else { return }
+            self.artwork = (url, Self.makeArtwork(image))
+            if let model {
+                self.update(from: model)
+            }
+        }
+    }
+
+    /// Wraps an image for the panel.
+    ///
+    /// Nonisolated on purpose. MediaPlayer asks the artwork for its picture on
+    /// a queue of its own, and a handler written inside this main-actor class
+    /// would inherit the main actor and trap the moment it was called anywhere
+    /// else. The image is only ever read once it has been handed over.
+    nonisolated static func makeArtwork(_ image: NSImage) -> MPMediaItemArtwork {
+        nonisolated(unsafe) let image = image
+        return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+    }
+
     private func clear() {
+        published = nil
+        artworkTask?.cancel()
+        artworkTask = nil
+        artworkRequestURL = nil
+        artwork = nil
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         MPNowPlayingInfoCenter.default().playbackState = .stopped
         let commandCenter = MPRemoteCommandCenter.shared()

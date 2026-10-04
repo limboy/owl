@@ -34,8 +34,8 @@ struct PlayerContainerView: View {
     @State private var seekValue: Double = 0
     @State private var hideTask: Task<Void, Never>?
     @State private var errorDismissTask: Task<Void, Never>?
-    @State private var subtitleNoticeVisible = false
-    @State private var subtitleNoticeDismissTask: Task<Void, Never>?
+    @State private var noticeVisible = false
+    @State private var noticeDismissTask: Task<Void, Never>?
 
     /// How many menus are open over the picture.
     ///
@@ -91,8 +91,8 @@ struct PlayerContainerView: View {
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
 
-            if subtitleNoticeVisible {
-                subtitleNoticeIndicator
+            if noticeVisible {
+                noticeIndicator
                     .transition(.opacity)
                     .allowsHitTesting(false)
             }
@@ -135,7 +135,7 @@ struct PlayerContainerView: View {
             .animation(.easeOut(duration: 0.18), value: controlsVisible)
             .animation(.easeOut(duration: 0.18), value: state.hasMedia)
             .animation(.easeOut(duration: 0.18), value: state.errorMessage)
-            .animation(.easeOut(duration: 0.18), value: subtitleNoticeVisible)
+            .animation(.easeOut(duration: 0.18), value: noticeVisible)
         }
         .overlay(alignment: .topTrailing) {
             if let onClose, state.hasMedia {
@@ -196,8 +196,8 @@ struct PlayerContainerView: View {
         .onChange(of: state.errorMessage) { _, message in
             scheduleErrorDismiss(for: message)
         }
-        .onChange(of: state.subtitleNoticeRevision) { _, _ in
-            showSubtitleNotice()
+        .onChange(of: state.noticeRevision) { _, _ in
+            showNotice()
         }
         .onChange(of: controlsVisible) { _, _ in
             updateCursorVisibility()
@@ -205,7 +205,7 @@ struct PlayerContainerView: View {
         .onDisappear {
             hideTask?.cancel()
             errorDismissTask?.cancel()
-            subtitleNoticeDismissTask?.cancel()
+            noticeDismissTask?.cancel()
             NSCursor.setHiddenUntilMouseMoves(false)
         }
         // A subtitle file is dropped on the picture far more readily than it is
@@ -242,6 +242,8 @@ struct PlayerContainerView: View {
             appModel.changeSubtitleDelay(by: -SubtitlePreference.delayStep)
         case .cycleSubtitle:
             appModel.cycleSubtitle()
+        case .showPosition:
+            appModel.showPosition()
         }
     }
 
@@ -322,36 +324,107 @@ struct PlayerContainerView: View {
         }
     }
 
-    private var subtitleNoticeIndicator: some View {
-        Text(subtitleNoticeText)
-            .font(.system(size: 20, weight: .semibold))
-            .foregroundStyle(.white)
-            .monospacedDigit()
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
+    /// The word over the picture, with a bar under it for the notices that
+    /// are a place on a scale: how loud, and how far in.
+    private var noticeIndicator: some View {
+        HStack(spacing: 14) {
+            Image(systemName: noticeSymbol)
+                .font(.system(size: 22, weight: .semibold))
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(noticeText)
+                    .font(.system(size: 20, weight: .semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                if let fraction = noticeFraction {
+                    noticeBar(fraction)
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
     }
 
-    private var subtitleNoticeText: String {
-        switch state.subtitleNotice {
-        case .delay(let seconds):
-            let milliseconds = Int((seconds * 1000).rounded())
-            let value = milliseconds > 0 ? "+\(milliseconds) ms" : "\(milliseconds) ms"
-            return "Subtitle Delay: \(value)"
-        case .scale(let scale):
-            return "Subtitle Size: \(Int((scale * 100).rounded()))%"
-        case .track(let name):
-            return "Subtitle: \(name)"
+    private func noticeBar(_ fraction: Double) -> some View {
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(Color.white.opacity(0.25))
+            Capsule()
+                .fill(Color.white)
+                .frame(width: 180 * min(max(fraction, 0), 1))
+        }
+        .frame(width: 180, height: 4)
+    }
+
+    private var noticeSymbol: String {
+        switch state.notice {
+        case .subtitleDelay, .subtitleScale, .subtitleTrack:
+            return "captions.bubble"
+        case .volume(let volume, let isMuted):
+            return Self.volumeSymbol(volume: volume, isMuted: isMuted)
+        case .speed:
+            return "gauge.with.dots.needle.67percent"
+        case .position:
+            return state.isPaused ? "pause.fill" : "play.fill"
         }
     }
 
-    private func showSubtitleNotice() {
-        subtitleNoticeDismissTask?.cancel()
-        subtitleNoticeVisible = true
-        subtitleNoticeDismissTask = Task { @MainActor in
+    private var noticeText: String {
+        switch state.notice {
+        case .subtitleDelay(let seconds):
+            let milliseconds = Int((seconds * 1000).rounded())
+            let value = milliseconds > 0 ? "+\(milliseconds) ms" : "\(milliseconds) ms"
+            return "Subtitle Delay: \(value)"
+        case .subtitleScale(let scale):
+            return "Subtitle Size: \(Int((scale * 100).rounded()))%"
+        case .subtitleTrack(let name):
+            return "Subtitle: \(name)"
+        case .volume(let volume, let isMuted):
+            let level = "\(Int(volume.rounded()))%"
+            return isMuted ? "Volume: \(level) (Muted)" : "Volume: \(level)"
+        case .speed(let speed):
+            return "Speed: \(playerSpeedLabel(speed))"
+        case .position:
+            guard state.duration > 0 else { return playerTimeString(state.currentTime) }
+            return "\(playerTimeString(state.currentTime)) / \(playerTimeString(state.duration))"
+        }
+    }
+
+    private var noticeFraction: Double? {
+        switch state.notice {
+        case .volume(let volume, _):
+            return volume / MPVPlayerEngine.volumeRange.upperBound
+        case .position where state.duration > 0:
+            return state.currentTime / state.duration
+        default:
+            return nil
+        }
+    }
+
+    /// The speaker for a level, shared by the volume button and the notice so
+    /// the two always draw the same one.
+    static func volumeSymbol(volume: Double, isMuted: Bool) -> String {
+        if isMuted || volume <= 0 {
+            return "speaker.slash"
+        }
+        if volume <= 33 {
+            return "speaker.wave.1"
+        }
+        if volume <= 66 {
+            return "speaker.wave.2"
+        }
+        return "speaker.wave.3"
+    }
+
+    private func showNotice() {
+        noticeDismissTask?.cancel()
+        noticeVisible = true
+        noticeDismissTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.5))
             guard !Task.isCancelled else { return }
-            subtitleNoticeVisible = false
+            noticeVisible = false
         }
     }
 
@@ -429,9 +502,9 @@ private struct PlayerControlsView: View {
         VStack(spacing: 8) {
             VStack(spacing: 2) {
                 HStack {
-                    Text(timeString(isSeeking ? seekValue : state.currentTime))
+                    Text(playerTimeString(isSeeking ? seekValue : state.currentTime))
                     Spacer()
-                    Text(timeString(state.duration))
+                    Text(playerTimeString(state.duration))
                 }
                 .font(.caption)
                 .foregroundStyle(Color.white.opacity(0.75))
@@ -479,7 +552,7 @@ private struct PlayerControlsView: View {
     }
 
     private var currentTimeLabel: some View {
-        Text(timeString(isSeeking ? seekValue : state.currentTime))
+        Text(playerTimeString(isSeeking ? seekValue : state.currentTime))
             .font(.caption)
             .foregroundStyle(Color.white.opacity(0.75))
             .monospacedDigit()
@@ -499,7 +572,7 @@ private struct PlayerControlsView: View {
     }
 
     private var durationLabel: some View {
-        Text(timeString(state.duration))
+        Text(playerTimeString(state.duration))
             .font(.caption)
             .foregroundStyle(Color.white.opacity(0.75))
             .monospacedDigit()
@@ -518,16 +591,7 @@ private struct PlayerControlsView: View {
     }
 
     private var volumeSymbol: String {
-        if state.isMuted || state.volume <= 0 {
-            return "speaker.slash"
-        }
-        if state.volume <= 33 {
-            return "speaker.wave.1"
-        }
-        if state.volume <= 66 {
-            return "speaker.wave.2"
-        }
-        return "speaker.wave.3"
+        PlayerContainerView.volumeSymbol(volume: state.volume, isMuted: state.isMuted)
     }
 
     private var volumeControl: some View {
@@ -582,7 +646,7 @@ private struct PlayerControlsView: View {
         Menu {
             ForEach(Self.speedPresets, id: \.self) { preset in
                 trackToggle(
-                    speedLabel(preset),
+                    playerSpeedLabel(preset),
                     selected: abs(state.speed - preset) < 0.001
                 ) {
                     appModel.setSpeed(preset)
@@ -596,21 +660,6 @@ private struct PlayerControlsView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Playback Speed")
-    }
-
-    private func speedLabel(_ speed: Double) -> String {
-        let rounded = (speed * 100).rounded() / 100
-        if rounded == rounded.rounded() {
-            return "\(Int(rounded))x"
-        }
-        var text = String(format: "%.2f", rounded)
-        while text.hasSuffix("0") {
-            text.removeLast()
-        }
-        if text.hasSuffix(".") {
-            text.removeLast()
-        }
-        return "\(text)x"
     }
 
     /// What the subtitle button offers: whether subtitles are showing, which
@@ -715,18 +764,34 @@ private struct PlayerControlsView: View {
         .buttonStyle(.plain)
         .help(help)
     }
+}
 
-    private func timeString(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "00:00" }
-        let total = Int(seconds.rounded(.down))
-        let hours = total / 3_600
-        let minutes = (total % 3_600) / 60
-        let remainingSeconds = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
-        }
-        return String(format: "%02d:%02d", minutes, remainingSeconds)
+/// "1.5x", "2x": a speed as the menu and the indicator both write it.
+private func playerSpeedLabel(_ speed: Double) -> String {
+    let rounded = (speed * 100).rounded() / 100
+    if rounded == rounded.rounded() {
+        return "\(Int(rounded))x"
     }
+    var text = String(format: "%.2f", rounded)
+    while text.hasSuffix("0") {
+        text.removeLast()
+    }
+    if text.hasSuffix(".") {
+        text.removeLast()
+    }
+    return "\(text)x"
+}
+
+private func playerTimeString(_ seconds: Double) -> String {
+    guard seconds.isFinite, seconds >= 0 else { return "00:00" }
+    let total = Int(seconds.rounded(.down))
+    let hours = total / 3_600
+    let minutes = (total % 3_600) / 60
+    let remainingSeconds = total % 60
+    if hours > 0 {
+        return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
+    }
+    return String(format: "%02d:%02d", minutes, remainingSeconds)
 }
 
 private extension View {

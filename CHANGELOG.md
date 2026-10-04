@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Show what changed over the picture when the volume, speed or position is changed from the keyboard, the menu bar or the media keys, and press `O` to see where playback is
+- Keep the Now Playing panel in step at every speed and after every seek, show the video's artwork there, and fix it reporting a paused video as playing
 
 ## [1.3.2] - 2026-09-26
 - Open a single video's window at the video's own size, centred on the screen, as IINA does — no more jumping from the last window's size

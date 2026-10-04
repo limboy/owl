@@ -14,8 +14,9 @@
 		0B55DEFEE779D30558AB43A4 /* OpenPanelPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD049F9D499797C934F77DAF /* OpenPanelPresentation.swift */; };
 		0F0CEB4FB74A2EAE50E89AE0 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = C86CBBC09AD4A7409E406990 /* Sparkle */; };
 		0F1FE9B21281C99684FE0C7E /* PlaybackQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74C76B9868D82BEC6FE6B098 /* PlaybackQueue.swift */; };
+		F80AE9A3CFE94D18A4F46E92 /* PlayerNoticeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D59AFF9947EC4FD78D29A192 /* PlayerNoticeTests.swift */; };
 		154F47E287B4363ECFC3499F /* PlayerKeyRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53B4FFFA39F2DDEE28712765 /* PlayerKeyRoutingTests.swift */; };
-		157464D8985821F6749440D8 /* SubtitleNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A24122838F0E7136BABE5F7 /* SubtitleNotice.swift */; };
+		157464D8985821F6749440D8 /* PlayerNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A24122838F0E7136BABE5F7 /* PlayerNotice.swift */; };
 		18187DD54A9546D0B257F2BA /* CMPVShim.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 456156D2104CCC71E44ED064 /* CMPVShim.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		19F93DAA44C3F00C9A4D04F7 /* LibMPVLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86F95DCB088AE9C1F23648D9 /* LibMPVLoaderTests.swift */; };
 		1B75F9576440638DA950DEDE /* ExternalProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A45CF271BF51DEF146E472C /* ExternalProcess.swift */; };
@@ -164,6 +165,7 @@
 		4970997FBFC0773D78E00155 /* ExternalThumbnailRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalThumbnailRenderer.swift; sourceTree = "<group>"; };
 		4A0DF4AA542114CF853F292E /* ContinueWatchingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinueWatchingView.swift; sourceTree = "<group>"; };
 		521442101CFC2609B330FADD /* FolderBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderBrowserView.swift; sourceTree = "<group>"; };
+		D59AFF9947EC4FD78D29A192 /* PlayerNoticeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerNoticeTests.swift; sourceTree = "<group>"; };
 		53B4FFFA39F2DDEE28712765 /* PlayerKeyRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerKeyRoutingTests.swift; sourceTree = "<group>"; };
 		53C32D670BE52750EF7D188B /* TimelinePreviewScrubber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelinePreviewScrubber.swift; sourceTree = "<group>"; };
 		5432C3419818B5FEE77FC848 /* FolderLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderLibraryTests.swift; sourceTree = "<group>"; };
@@ -175,7 +177,7 @@
 		6AE954E35FCE42F7F7F783F7 /* SubtitleLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleLanguage.swift; sourceTree = "<group>"; };
 		6B823CA05336226BDE2E3C15 /* TMDBClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TMDBClient.swift; sourceTree = "<group>"; };
 		74C76B9868D82BEC6FE6B098 /* PlaybackQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackQueue.swift; sourceTree = "<group>"; };
-		7A24122838F0E7136BABE5F7 /* SubtitleNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleNotice.swift; sourceTree = "<group>"; };
+		7A24122838F0E7136BABE5F7 /* PlayerNotice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerNotice.swift; sourceTree = "<group>"; };
 		7E9A82848C0D9F83D3630766 /* PlayerKeyboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerKeyboardMonitor.swift; sourceTree = "<group>"; };
 		81840AEB2C8BA1EEE343254F /* PlayerContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerContainerView.swift; sourceTree = "<group>"; };
 		84337DE90BFA1B9260252216 /* FullScreenTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenTransition.swift; sourceTree = "<group>"; };
@@ -316,6 +318,7 @@
 				2AD9C30DD296E1E842395C5D /* PlaybackProgressStoreTests.swift */,
 				8F4E79E721FB5FC7B15A2708 /* PlaybackQueueTests.swift */,
 				093418A852F12FF5F2C2A376 /* PlaybackSleepPreventionTests.swift */,
+				D59AFF9947EC4FD78D29A192 /* PlayerNoticeTests.swift */,
 				53B4FFFA39F2DDEE28712765 /* PlayerKeyRoutingTests.swift */,
 				40633D16992B312A728DCD19 /* PlayerStateTests.swift */,
 				C01ADE4BFA5EA9A7DDB690A9 /* RecentFilesTests.swift */,
@@ -368,7 +371,7 @@
 				27578999F49A171B6A85C2FF /* PlayerState.swift */,
 				29BADA9E1532096C38BA0569 /* SubtitleFile.swift */,
 				6AE954E35FCE42F7F7F783F7 /* SubtitleLanguage.swift */,
-				7A24122838F0E7136BABE5F7 /* SubtitleNotice.swift */,
+				7A24122838F0E7136BABE5F7 /* PlayerNotice.swift */,
 				BB0D9DCB9D710E27DC8929AB /* SubtitlePreference.swift */,
 				251460B3A030FC4F10DFA90F /* SubtitleSelection.swift */,
 				DC6D17A8C1723ECB080630E1 /* VideoSurface.swift */,
@@ -579,6 +582,7 @@
 				813E6B59B6395BBE815BF623 /* PlaybackProgressStoreTests.swift in Sources */,
 				BA33FD9D3E71A5B4BCB0EC6B /* PlaybackQueueTests.swift in Sources */,
 				3794109AEE0FD8A669674436 /* PlaybackSleepPreventionTests.swift in Sources */,
+				F80AE9A3CFE94D18A4F46E92 /* PlayerNoticeTests.swift in Sources */,
 				154F47E287B4363ECFC3499F /* PlayerKeyRoutingTests.swift in Sources */,
 				D37A917110D804F2977D2DE5 /* PlayerStateTests.swift in Sources */,
 				08D41624CBE7B6F3B7233E80 /* RecentFilesTests.swift in Sources */,
@@ -631,7 +635,7 @@
 				BA65853787ED011440B89DC6 /* RecentFiles.swift in Sources */,
 				B8067B9A7330CA0123660A63 /* SubtitleFile.swift in Sources */,
 				41695C50DA0B57E0F7C1589D /* SubtitleLanguage.swift in Sources */,
-				157464D8985821F6749440D8 /* SubtitleNotice.swift in Sources */,
+				157464D8985821F6749440D8 /* PlayerNotice.swift in Sources */,
 				7FB9F834AEE4B64540CD3752 /* SubtitlePreference.swift in Sources */,
 				E4368B8AD8A1ED9FB899C379 /* SubtitleSelection.swift in Sources */,
 				A320BDF277E707001200FB67 /* SubtitleStateStore.swift in Sources */,

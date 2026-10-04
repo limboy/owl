@@ -53,6 +53,19 @@ final class PlayerKeyRoutingTests: XCTestCase {
         XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("z", modifiers: .command)))
     }
 
+    /// O is the key mpv and IINA both use to say where playback is.
+    func testOShowsThePosition() {
+        XCTAssertEqual(PlayerKeyRouting.key(for: keyEvent("o")), .showPosition)
+        XCTAssertEqual(
+            PlayerKeyRouting.key(for: keyEvent("O", modifiers: .capsLock)),
+            .showPosition
+        )
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("O", modifiers: .shift)))
+        // ⌘O is Open File….
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("o", modifiers: .command)))
+        XCTAssertFalse(PlayerKey.showPosition.repeats)
+    }
+
     /// Holding the delay keys down would run the subtitles minutes out of step
     /// inside a second, at a quarter of a second for every repeat the keyboard
     /// sends.

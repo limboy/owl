@@ -86,15 +86,15 @@ final class PlayerState: ObservableObject {
     /// Seconds subtitles are shifted relative to the video, positive meaning
     /// subtitles show later. Mirrors mpv's `sub-delay`.
     @Published var subtitleDelay: Double = 0
-    /// What the last subtitle adjustment was, for the indicator that flashes
-    /// over the picture. Carries the value rather than a formatted string, so
-    /// the wording stays with the view that draws it.
-    @Published var subtitleNotice: SubtitleNotice = .delay(0)
-    /// Bumped every time an adjustment sets `subtitleNotice`, even when the
-    /// new notice equals the old one (e.g. Reset at a delay of 0). A view
-    /// wanting to flash the indicator on every such action — not only when
-    /// the value actually moves — observes this instead of the notice itself.
-    @Published var subtitleNoticeRevision = 0
+    /// What the last adjustment was, for the indicator that flashes over the
+    /// picture.
+    @Published var notice: PlayerNotice = .subtitleDelay(0)
+    /// Bumped every time something sets `notice`, even when the new notice
+    /// equals the old one (e.g. Reset at a delay of 0, or a second press of
+    /// the key that shows the position). A view wanting to flash the indicator
+    /// on every such action — not only when the value actually moves —
+    /// observes this instead of the notice itself.
+    @Published var noticeRevision = 0
     @Published var currentURL: URL?
     /// The picture's display aspect ratio — its width over its height, as it
     /// will be drawn — or nil while there is no video to take one from.
@@ -128,12 +128,13 @@ final class PlayerState: ObservableObject {
         subtitles.first(where: \.isSelected)
     }
 
-    /// Announces a subtitle adjustment to the indicator. Every path that
-    /// changes subtitles goes through here, so none of them can show the
-    /// picture changing with no word of why.
-    func announce(_ notice: SubtitleNotice) {
-        subtitleNotice = notice
-        subtitleNoticeRevision += 1
+    /// Announces an adjustment to the indicator. Every path that changes the
+    /// subtitles, the volume or the speed, or moves the position, from
+    /// anywhere but the controls that already show it goes through here, so
+    /// none of them can change what is seen or heard with no word of why.
+    func announce(_ notice: PlayerNotice) {
+        self.notice = notice
+        noticeRevision += 1
     }
 
     /// `startAt` is where the file is about to resume, if anywhere, so the

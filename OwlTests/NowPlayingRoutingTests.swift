@@ -79,6 +79,53 @@ final class NowPlayingRoutingTests: XCTestCase {
         )
     }
 
+    /// The panel moves its slider on by itself at the rate it was given, so the
+    /// rate has to be the speed actually playing — and nothing at all while
+    /// paused.
+    func testThePanelsRateIsThePlaybackSpeed() {
+        let model = makeModel(playing: "film.mkv")
+        model.playerState.isPaused = false
+        model.playerState.speed = 1.5
+        NowPlayingCenter.shared.activate(model)
+        XCTAssertEqual(nowPlayingRate, 1.5)
+        XCTAssertEqual(
+            nowPlayingInfo?[MPNowPlayingInfoPropertyMediaType] as? UInt,
+            MPNowPlayingInfoMediaType.video.rawValue
+        )
+
+        model.playerState.isPaused = true
+        NowPlayingCenter.shared.update(from: model)
+        XCTAssertEqual(nowPlayingRate, 0)
+        XCTAssertEqual(MPNowPlayingInfoCenter.default().playbackState, .paused)
+    }
+
+    /// Ordinary playback is left to the panel's own clock; a jump is not.
+    func testOnlyAPositionThePanelCannotWorkOutIsSentAgain() {
+        let model = makeModel(playing: "film.mkv")
+        model.playerState.isPaused = true
+        model.playerState.currentTime = 10
+        NowPlayingCenter.shared.activate(model)
+
+        model.playerState.currentTime = 10.5
+        NowPlayingCenter.shared.positionChanged(from: model)
+        XCTAssertEqual(nowPlayingElapsed, 10, "half a second is inside the panel's tolerance")
+
+        model.playerState.currentTime = 300
+        NowPlayingCenter.shared.positionChanged(from: model)
+        XCTAssertEqual(nowPlayingElapsed, 300, "a seek should reach the panel at once")
+    }
+
+    /// MediaPlayer asks for the picture from its own queue. A handler tied to
+    /// the main actor traps there, taking the app down the first time a file
+    /// has artwork.
+    func testArtworkCanBeDrawnOffTheMainThread() async {
+        let artwork = NowPlayingCenter.makeArtwork(NSImage(size: NSSize(width: 16, height: 9)))
+        let size = await Task.detached {
+            artwork.image(at: CGSize(width: 16, height: 9))?.size
+        }.value
+        XCTAssertEqual(size, NSSize(width: 16, height: 9))
+    }
+
     /// A window opened on one file has that file and nothing else to play, so
     /// there is nowhere for it to go when it reaches the end.
     func testAFileOpenedOnItsOwnHasAQueueOfOne() throws {
@@ -127,6 +174,14 @@ final class NowPlayingRoutingTests: XCTestCase {
 
     private var nowPlayingInfo: [String: Any]? {
         MPNowPlayingInfoCenter.default().nowPlayingInfo
+    }
+
+    private var nowPlayingRate: Double? {
+        nowPlayingInfo?[MPNowPlayingInfoPropertyPlaybackRate] as? Double
+    }
+
+    private var nowPlayingElapsed: Double? {
+        nowPlayingInfo?[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double
     }
 
     private var nowPlayingTitle: String? {

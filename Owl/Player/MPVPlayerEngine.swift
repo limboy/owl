@@ -254,7 +254,7 @@ final class MPVPlayerEngine: @unchecked Sendable {
                 case "duration" where valueType == MVP_MPV_VALUE_DOUBLE:
                     state.duration = number.isFinite ? max(0, number) : 0
                 case "volume" where valueType == MVP_MPV_VALUE_DOUBLE:
-                    state.volume = min(max(number, 0), 100)
+                    state.volume = Self.volumeRange.clamped(number)
                 case "mute" where valueType == MVP_MPV_VALUE_FLAG:
                     state.isMuted = flag
                 case "speed" where valueType == MVP_MPV_VALUE_DOUBLE:
@@ -467,12 +467,15 @@ final class MPVPlayerEngine: @unchecked Sendable {
         command(["seek", String(seconds), "relative+exact"])
     }
 
+    static let volumeRange: ClosedRange<Double> = 0...100
+    static let speedRange: ClosedRange<Double> = 0.25...4
+
     func setVolume(_ volume: Double) {
-        setDouble(property: "volume", value: min(max(volume, 0), 100))
+        setDouble(property: "volume", value: Self.volumeRange.clamped(volume))
     }
 
     func setSpeed(_ speed: Double) {
-        setDouble(property: "speed", value: min(max(speed, 0.25), 4))
+        setDouble(property: "speed", value: Self.speedRange.clamped(speed))
     }
 
     func toggleMute() {
@@ -589,5 +592,11 @@ final class MPVPlayerEngine: @unchecked Sendable {
 
     var rawHandle: OpaquePointer {
         handle
+    }
+}
+
+extension ClosedRange where Bound == Double {
+    func clamped(_ value: Double) -> Double {
+        Swift.min(Swift.max(value, lowerBound), upperBound)
     }
 }
