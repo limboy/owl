@@ -5,6 +5,8 @@ struct TimelinePreviewScrubber: View {
     let currentTime: Double
     let duration: Double
     let url: URL?
+    /// Marked along the bar where each begins.
+    let chapters: [Chapter]
     @Binding var isSeeking: Bool
     @Binding var seekValue: Double
     let onCommit: (Double) -> Void
@@ -63,6 +65,7 @@ struct TimelinePreviewScrubber: View {
                 Capsule()
                     .fill(Color.accentColor)
                     .frame(width: width * progress, height: 4)
+                chapterMarks(width: width)
                 Circle()
                     .fill(Color.white)
                     .frame(width: 12, height: 12)
@@ -154,6 +157,18 @@ struct TimelinePreviewScrubber: View {
         }
         .opacity(duration > 0 ? 1 : 0.55)
         .allowsHitTesting(duration > 0)
+    }
+
+    /// A notch cut across the bar where each chapter begins. Not at the very
+    /// start, where every file with chapters has one and the bar already ends.
+    private func chapterMarks(width: CGFloat) -> some View {
+        ForEach(chapters.filter { $0.start > 0 && $0.start < duration }) { chapter in
+            Rectangle()
+                .fill(Color.black.opacity(0.6))
+                .frame(width: 2, height: 4)
+                .offset(x: width * ratio(for: chapter.start) - 1)
+                .allowsHitTesting(false)
+        }
     }
 
     private func ratio(for time: Double) -> Double {

@@ -286,6 +286,7 @@ final class MPVPlayerEngine: @unchecked Sendable {
 
         case MVP_MPV_EVENT_FILE_LOADED:
             refreshTracks()
+            refreshChapters()
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.state.isLoading = false
@@ -294,6 +295,9 @@ final class MPVPlayerEngine: @unchecked Sendable {
 
         case MVP_MPV_EVENT_TRACKS_CHANGED:
             refreshTracks()
+
+        case MVP_MPV_EVENT_CHAPTERS_CHANGED:
+            refreshChapters()
 
         case MVP_MPV_EVENT_END_FILE:
             let reason = event.end_reason
@@ -389,6 +393,29 @@ final class MPVPlayerEngine: @unchecked Sendable {
         Task { @MainActor [weak self] in
             self?.state.subtitles = subtitles
             self?.state.audioTracks = audioTracks
+        }
+    }
+
+    private func refreshChapters() {
+        let count = mvp_mpv_copy_chapters(handle, nil, 0)
+        guard count >= 0 else { return }
+        var values = [MVPMPVChapter](repeating: MVPMPVChapter(), count: Int(count))
+        let copied = values.withUnsafeMutableBufferPointer { buffer in
+            mvp_mpv_copy_chapters(handle, buffer.baseAddress, Int32(buffer.count))
+        }
+        guard copied >= 0 else { return }
+
+        let chapters = values.prefix(Int(copied)).enumerated().map { index, value -> Chapter in
+            var mutableValue = value
+            return Chapter(
+                index: index,
+                title: swiftString(from: &mutableValue.title),
+                start: value.time.isFinite ? max(0, value.time) : 0
+            )
+        }
+
+        Task { @MainActor [weak self] in
+            self?.state.chapters = chapters
         }
     }
 

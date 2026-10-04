@@ -172,6 +172,14 @@ struct PlaybackCommands: Commands {
                 target?.appModel.seek(by: 5)
             }
 
+            Button("Next Chapter") {
+                target?.appModel.playNextChapter()
+            }
+
+            Button("Previous Chapter") {
+                target?.appModel.playPreviousChapter()
+            }
+
             Button("Volume Up") {
                 target?.appModel.changeVolume(by: 5)
             }

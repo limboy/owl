@@ -53,6 +53,25 @@ final class PlayerKeyRoutingTests: XCTestCase {
         XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("z", modifiers: .command)))
     }
 
+    /// Page Down and Page Up are mpv's chapter keys.
+    func testThePageKeysMoveBetweenChapters() {
+        XCTAssertEqual(
+            PlayerKeyRouting.key(for: arrowEvent(NSPageDownFunctionKey, modifiers: .function)),
+            .nextChapter
+        )
+        XCTAssertEqual(
+            PlayerKeyRouting.key(for: arrowEvent(NSPageUpFunctionKey, modifiers: .function)),
+            .previousChapter
+        )
+        XCTAssertFalse(PlayerKey.nextChapter.repeats)
+
+        // A list pages through itself with them.
+        let table = NSTableView()
+        XCTAssertFalse(PlayerKeyRouting.belongsToPlayer(.nextChapter, firstResponder: table))
+        XCTAssertFalse(PlayerKeyRouting.belongsToPlayer(.previousChapter, firstResponder: table))
+        XCTAssertTrue(PlayerKeyRouting.belongsToPlayer(.nextChapter, firstResponder: nil))
+    }
+
     /// O is the key mpv and IINA both use to say where playback is.
     func testOShowsThePosition() {
         XCTAssertEqual(PlayerKeyRouting.key(for: keyEvent("o")), .showPosition)

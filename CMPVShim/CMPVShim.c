@@ -445,6 +445,9 @@ MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
     // for as doubles so they arrive the way every other number here does.
     player->observe_property(player->handle, 11, "video-out-params/dw", MPV_FORMAT_DOUBLE);
     player->observe_property(player->handle, 12, "video-out-params/dh", MPV_FORMAT_DOUBLE);
+    // Like track-list: only the news that it changed, with the list itself read
+    // by mvp_mpv_copy_chapters.
+    player->observe_property(player->handle, 13, "chapter-list", MPV_FORMAT_NONE);
 
     write_error(error_buffer, error_buffer_size, "");
     return player;
@@ -553,6 +556,10 @@ int mvp_mpv_poll_event(MVPMPVPlayer *player, MVPMPVEvent *output) {
         }
         if (strcmp(property->name, "track-list") == 0) {
             output->type = MVP_MPV_EVENT_TRACKS_CHANGED;
+            return 1;
+        }
+        if (strcmp(property->name, "chapter-list") == 0) {
+            output->type = MVP_MPV_EVENT_CHAPTERS_CHANGED;
             return 1;
         }
 
@@ -901,5 +908,57 @@ int mvp_mpv_copy_audio_tracks(
     }
 
     player->free_node_contents(&track_list);
+    return count;
+}
+
+static double node_double(mpv_node *node) {
+    if (node == NULL) {
+        return 0;
+    }
+    if (node->format == MPV_FORMAT_DOUBLE) {
+        return node->value.double_value;
+    }
+    if (node->format == MPV_FORMAT_INT64) {
+        return (double)node->value.int64;
+    }
+    return 0;
+}
+
+int mvp_mpv_copy_chapters(
+    MVPMPVPlayer *player,
+    MVPMPVChapter *chapters,
+    int capacity
+) {
+    if (player == NULL || player->handle == NULL) {
+        return -1;
+    }
+
+    mpv_node chapter_list = {0};
+    int status = player->get_property(
+        player->handle,
+        "chapter-list",
+        MPV_FORMAT_NODE,
+        &chapter_list
+    );
+    if (status < 0) {
+        return status;
+    }
+
+    int count = 0;
+    if (chapter_list.format == MPV_FORMAT_NODE_ARRAY && chapter_list.value.list != NULL) {
+        mpv_node_list *items = chapter_list.value.list;
+        for (int index = 0; index < items->num; index++) {
+            mpv_node *item = &items->values[index];
+            if (chapters != NULL && count < capacity) {
+                MVPMPVChapter *chapter = &chapters[count];
+                memset(chapter, 0, sizeof(*chapter));
+                chapter->time = node_double(map_value(item, "time"));
+                copy_text(chapter->title, sizeof(chapter->title), node_string(map_value(item, "title")));
+            }
+            count++;
+        }
+    }
+
+    player->free_node_contents(&chapter_list);
     return count;
 }

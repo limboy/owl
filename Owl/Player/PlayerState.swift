@@ -107,6 +107,9 @@ final class PlayerState: ObservableObject {
     @Published var videoDisplayHeight: Double?
     @Published var subtitles: [SubtitleTrack] = []
     @Published var audioTracks: [AudioTrack] = []
+    /// The file's chapters in order, empty for a file that marks none.
+    /// Mirrors mpv's `chapter-list`.
+    @Published var chapters: [Chapter] = []
     @Published var errorMessage: String?
 
     var hasMedia: Bool {
@@ -126,6 +129,11 @@ final class PlayerState: ObservableObject {
 
     var selectedSubtitle: SubtitleTrack? {
         subtitles.first(where: \.isSelected)
+    }
+
+    /// The chapter playback is in, if the file has any.
+    var currentChapter: Chapter? {
+        ChapterNavigation.chapter(at: currentTime, in: chapters)
     }
 
     /// Announces an adjustment to the indicator. Every path that changes the
@@ -153,6 +161,7 @@ final class PlayerState: ObservableObject {
         errorMessage = nil
         subtitles = []
         audioTracks = []
+        chapters = []
     }
 
     func reset() {
@@ -166,6 +175,7 @@ final class PlayerState: ObservableObject {
         videoDisplayHeight = nil
         subtitles = []
         audioTracks = []
+        chapters = []
         errorMessage = nil
     }
 }

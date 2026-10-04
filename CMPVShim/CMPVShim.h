@@ -18,7 +18,8 @@ typedef enum MVPMPVEventType {
     MVP_MPV_EVENT_END_FILE = 3,
     MVP_MPV_EVENT_SHUTDOWN = 4,
     MVP_MPV_EVENT_COMMAND_ERROR = 5,
-    MVP_MPV_EVENT_TRACKS_CHANGED = 6
+    MVP_MPV_EVENT_TRACKS_CHANGED = 6,
+    MVP_MPV_EVENT_CHAPTERS_CHANGED = 7
 } MVPMPVEventType;
 
 typedef enum MVPMPVValueType {
@@ -60,6 +61,11 @@ typedef struct MVPMPVAudioTrack {
     char language[64];
     char codec[64];
 } MVPMPVAudioTrack;
+
+typedef struct MVPMPVChapter {
+    double time;
+    char title[256];
+} MVPMPVChapter;
 
 typedef void (*MVPMPVCallback)(void *context);
 typedef void *(*MVPMPVGetProcAddress)(void *context, const char *name);
@@ -135,6 +141,14 @@ int mvp_mpv_copy_subtitle_tracks(
 int mvp_mpv_copy_audio_tracks(
     MVPMPVPlayer *player,
     MVPMPVAudioTrack *tracks,
+    int capacity
+);
+
+// The file's chapters in order, the way the track copies work: called with no
+// buffer it returns how many there are.
+int mvp_mpv_copy_chapters(
+    MVPMPVPlayer *player,
+    MVPMPVChapter *chapters,
     int capacity
 );
 

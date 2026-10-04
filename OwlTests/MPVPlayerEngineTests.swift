@@ -406,6 +406,27 @@ final class MPVPlayerEngineTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(500))
     }
 
+    /// Chapters cross from mpv through the C shim as a node list, which only
+    /// a real player reports.
+    func testAFilesChaptersAreReportedInOrderWithTheirTitles() async throws {
+        let engine = try makeEngine()
+        // Sound only: with no surface to draw on, a picture is something mpv
+        // has nothing to play.
+        let sample = try makeSample(audioOnly: true, chapters: [(0, "Opening"), (4, "Middle"), (7, nil)])
+        defer { try? FileManager.default.removeItem(at: sample) }
+
+        engine.load(sample)
+        try await waitUntil { engine.state.chapters.count == 3 }
+
+        let chapters = engine.state.chapters
+        XCTAssertEqual(chapters.map(\.displayName), ["Opening", "Middle", "Chapter 3"])
+        XCTAssertEqual(chapters.map(\.start), [0, 4, 7])
+        XCTAssertEqual(chapters.map(\.index), [0, 1, 2])
+
+        engine.shutdown()
+        try await Task.sleep(for: .milliseconds(500))
+    }
+
     private func makeSubtitle() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("OwlEngineSample-\(UUID().uuidString).srt")
@@ -444,7 +465,8 @@ final class MPVPlayerEngineTests: XCTestCase {
         audioOnly: Bool = false,
         frameRate: Int = 10,
         duration: Int = 10,
-        includesAudio: Bool = false
+        includesAudio: Bool = false,
+        chapters: [(start: Int, title: String?)] = []
     ) throws -> URL {
         guard case .ffmpeg(let ffmpeg)? = ExternalThumbnailRenderer.locateTool() else {
             throw XCTSkip("ffmpeg is not installed in this environment.")
@@ -458,6 +480,23 @@ final class MPVPlayerEngineTests: XCTestCase {
         let audioInput = includesAudio && !audioOnly
             ? ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
             : []
+        // Chapters go in through an ffmetadata file, the one way ffmpeg takes
+        // them from the command line. Not alongside a second sound input, so
+        // the metadata input's number never has to be worked out.
+        var chapterInput: [String] = []
+        if !chapters.isEmpty, !includesAudio {
+            var metadata = ";FFMETADATA1\n"
+            for (offset, chapter) in chapters.enumerated() {
+                let end = offset + 1 < chapters.count ? chapters[offset + 1].start : duration
+                metadata += "[CHAPTER]\nTIMEBASE=1/1\nSTART=\(chapter.start)\nEND=\(end)\n"
+                if let title = chapter.title {
+                    metadata += "title=\(title)\n"
+                }
+            }
+            let metadataURL = url.appendingPathExtension("ffmetadata")
+            try Data(metadata.utf8).write(to: metadataURL)
+            chapterInput = ["-f", "ffmetadata", "-i", metadataURL.path, "-map", "0", "-map_chapters", "1"]
+        }
         let codec = audioOnly
             ? ["-c:a", "aac"]
             : ["-c:v", "libx264", "-pix_fmt", "yuv420p"]
@@ -468,7 +507,7 @@ final class MPVPlayerEngineTests: XCTestCase {
             "-hide_banner",
             "-loglevel", "error",
             "-f", "lavfi",
-        ] + source + audioInput + [
+        ] + source + audioInput + chapterInput + [
             "-t", String(duration),
         ] + codec + (includesAudio && !audioOnly ? ["-c:a", "aac"] : []) + [
             url.path,

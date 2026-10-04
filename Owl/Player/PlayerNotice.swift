@@ -16,6 +16,8 @@ enum PlayerNotice: Equatable, Sendable {
     /// The level asked for, 0 to 100, and whether sound is muted regardless.
     case volume(Double, isMuted: Bool)
     case speed(Double)
+    /// The chapter just moved to, by name.
+    case chapter(String)
     /// Where playback is in the file. Carries nothing because the indicator
     /// reads the live position for as long as it is up: a seek is reported
     /// before mpv has finished it, and the clock keeps moving afterwards.

@@ -46,7 +46,7 @@ final class NowPlayingCenter {
 
     /// What was last handed to the system, so that a position mpv reports can
     /// be checked against where the panel believes playback has got to.
-    private var published: (url: URL, elapsed: Double, rate: Double, at: Date)?
+    private var published: (url: URL, elapsed: Double, rate: Double, at: Date, chapter: Int?)?
 
     /// The artwork for the file being played, once it has been found, and the
     /// file it is being looked for on behalf of.
@@ -92,6 +92,10 @@ final class NowPlayingCenter {
             info[MPNowPlayingInfoPropertyPlaybackQueueIndex] = index
             info[MPNowPlayingInfoPropertyPlaybackQueueCount] = queue.count
         }
+        if let chapter = state.currentChapter {
+            info[MPNowPlayingInfoPropertyChapterCount] = state.chapters.count
+            info[MPNowPlayingInfoPropertyChapterNumber] = chapter.index
+        }
         if let artwork, artwork.url == url {
             info[MPMediaItemPropertyArtwork] = artwork.artwork
         } else {
@@ -108,7 +112,7 @@ final class NowPlayingCenter {
             center.playbackState = .playing
         }
         center.playbackState = state.isPaused ? .paused : .playing
-        published = (url, state.currentTime, rate, Date())
+        published = (url, state.currentTime, rate, Date(), state.currentChapter?.index)
 
         let commandCenter = MPRemoteCommandCenter.shared()
         let hasQueue = queue.count > 1
@@ -122,13 +126,18 @@ final class NowPlayingCenter {
     /// Called on every position mpv reports. Ordinary playback stays inside
     /// the tolerance and costs a subtraction; a seek, from the keys or the
     /// timeline or the panel itself, lands outside it and is published at once
-    /// rather than whenever the next periodic update comes round.
+    /// rather than whenever the next periodic update comes round. So is moving
+    /// into another chapter.
     func positionChanged(from model: AppModel) {
         guard activeModel === model, let published else { return }
         let state = model.playerState
         guard state.currentURL == published.url else { return }
         let expected = published.elapsed + Date().timeIntervalSince(published.at) * published.rate
-        guard abs(state.currentTime - expected) > Self.positionTolerance else { return }
+        let hasJumped = abs(state.currentTime - expected) > Self.positionTolerance
+        // The panel names the chapter, and cannot work out for itself when
+        // playing has carried on into the next one.
+        let hasChangedChapter = state.currentChapter?.index != published.chapter
+        guard hasJumped || hasChangedChapter else { return }
         update(from: model)
     }
 

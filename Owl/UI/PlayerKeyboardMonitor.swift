@@ -12,18 +12,21 @@ enum PlayerKey: Equatable {
     case decreaseSubtitleDelay
     case cycleSubtitle
     case showPosition
+    case nextChapter
+    case previousChapter
 
     /// Whether holding the key down should keep repeating the action. Seeking
     /// and volume are worth repeating; toggling anything on the same repeats
     /// only flickers. Nor is the subtitle delay: a quarter of a second per
     /// repeat at the rate a held key sends them would run the subtitles
-    /// minutes out inside a second.
+    /// minutes out inside a second, nor the chapter keys, which held would
+    /// skip through a file's chapters faster than their names could be read.
     var repeats: Bool {
         switch self {
         case .seekBackward, .seekForward, .volumeUp, .volumeDown:
             true
         case .togglePlayPause, .increaseSubtitleDelay, .decreaseSubtitleDelay, .cycleSubtitle,
-             .showPosition:
+             .showPosition, .nextChapter, .previousChapter:
             false
         }
     }
@@ -59,6 +62,11 @@ enum PlayerKeyRouting {
             return .volumeUp
         case NSDownArrowFunctionKey where !isShifted:
             return .volumeDown
+        // mpv's keys for the chapters.
+        case NSPageDownFunctionKey where !isShifted:
+            return .nextChapter
+        case NSPageUpFunctionKey where !isShifted:
+            return .previousChapter
         default:
             break
         }
@@ -99,13 +107,14 @@ enum PlayerKeyRouting {
             if current is NSText || current is NSTextField {
                 return false
             }
-            // A list moves its selection with the vertical arrows. Seeking,
+            // A list moves its selection with the vertical arrows, and pages
+            // through itself with Page Up and Page Down. Seeking,
             // the space bar and the subtitle keys mean nothing to it, so those
             // stay with the player even while the folder browser is being read
             // through — and the player is what covers the browser whenever
             // these keys are being watched for at all.
             if current is NSTableView || current is NSOutlineView || current is NSCollectionView {
-                return key != .volumeUp && key != .volumeDown
+                return ![.volumeUp, .volumeDown, .nextChapter, .previousChapter].contains(key)
             }
             responder = current.nextResponder
         }

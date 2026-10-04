@@ -244,6 +244,10 @@ struct PlayerContainerView: View {
             appModel.cycleSubtitle()
         case .showPosition:
             appModel.showPosition()
+        case .nextChapter:
+            appModel.playNextChapter()
+        case .previousChapter:
+            appModel.playPreviousChapter()
         }
     }
 
@@ -366,6 +370,8 @@ struct PlayerContainerView: View {
             return Self.volumeSymbol(volume: volume, isMuted: isMuted)
         case .speed:
             return "gauge.with.dots.needle.67percent"
+        case .chapter:
+            return "list.bullet.rectangle"
         case .position:
             return state.isPaused ? "pause.fill" : "play.fill"
         }
@@ -386,6 +392,8 @@ struct PlayerContainerView: View {
             return isMuted ? "Volume: \(level) (Muted)" : "Volume: \(level)"
         case .speed(let speed):
             return "Speed: \(playerSpeedLabel(speed))"
+        case .chapter(let name):
+            return name
         case .position:
             guard state.duration > 0 else { return playerTimeString(state.currentTime) }
             return "\(playerTimeString(state.currentTime)) / \(playerTimeString(state.duration))"
@@ -564,6 +572,7 @@ private struct PlayerControlsView: View {
             currentTime: state.currentTime,
             duration: state.duration,
             url: state.currentURL,
+            chapters: state.chapters,
             isSeeking: $isSeeking,
             seekValue: $seekValue
         ) { value in

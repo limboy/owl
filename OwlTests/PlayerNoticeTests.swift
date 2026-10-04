@@ -70,6 +70,35 @@ final class PlayerNoticeTests: XCTestCase {
         XCTAssertEqual(model.playerState.noticeRevision, before + 3)
     }
 
+    /// The clock moves with the jump rather than when mpv reports it, so a
+    /// second press goes on from the chapter the first one reached.
+    func testMovingBetweenChaptersNamesTheChapterAndMovesTheClock() {
+        model.playerState.chapters = [
+            Chapter(index: 0, title: "Opening", start: 0),
+            Chapter(index: 1, title: "Middle", start: 60),
+            Chapter(index: 2, title: "", start: 120),
+        ]
+        model.playerState.currentTime = 10
+
+        model.playNextChapter()
+        XCTAssertEqual(model.playerState.notice, .chapter("Middle"))
+        XCTAssertEqual(model.playerState.currentTime, 60)
+
+        model.playNextChapter()
+        XCTAssertEqual(model.playerState.notice, .chapter("Chapter 3"))
+
+        let before = model.playerState.noticeRevision
+        model.playNextChapter()
+        XCTAssertEqual(
+            model.playerState.noticeRevision,
+            before,
+            "there is no chapter after the last, and nothing should say there was"
+        )
+
+        model.playPreviousChapter()
+        XCTAssertEqual(model.playerState.notice, .chapter("Middle"))
+    }
+
     func testNothingIsAnnouncedWithNothingPlaying() {
         model.playerState.currentURL = nil
         let before = model.playerState.noticeRevision

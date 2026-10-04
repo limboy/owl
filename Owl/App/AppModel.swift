@@ -194,6 +194,35 @@ final class AppModel: ObservableObject {
         playerState.announce(.position)
     }
 
+    func playNextChapter() {
+        guard playerState.hasMedia,
+              let chapter = ChapterNavigation.next(
+                after: playerState.currentTime,
+                in: playerState.chapters
+              )
+        else { return }
+        jump(to: chapter)
+    }
+
+    func playPreviousChapter() {
+        guard playerState.hasMedia,
+              let chapter = ChapterNavigation.previous(
+                from: playerState.currentTime,
+                in: playerState.chapters
+              )
+        else { return }
+        jump(to: chapter)
+    }
+
+    private func jump(to chapter: Chapter) {
+        engine?.seek(to: chapter.start)
+        // Moved at once, as the volume is: the clock otherwise reads the old
+        // chapter until mpv reports the seek, and a second press in that gap
+        // would go from there.
+        playerState.currentTime = chapter.start
+        playerState.announce(.chapter(chapter.displayName))
+    }
+
     /// Says where playback is, for the key that asks without touching anything.
     func showPosition() {
         guard playerState.hasMedia else { return }
@@ -508,10 +537,11 @@ final class AppModel: ObservableObject {
         // Delivered on the next turn of the main queue, after the new value
         // has been stored — see the note below — because the panel is built
         // by reading playerState, not from the value handed to the sink.
-        Publishers.Merge3(
+        Publishers.Merge4(
             playerState.$isPaused.map { _ in () },
             playerState.$speed.map { _ in () },
-            playerState.$duration.map { _ in () }
+            playerState.$duration.map { _ in () },
+            playerState.$chapters.map { _ in () }
         )
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.updateNowPlaying() }
