@@ -1,6 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+
+## [1.4.0] - 2026-10-04
+- Rework the player controls into two rows: the timeline across the top, play/pause with the time beside it, the video's name in the middle, and volume, audio, speed and subtitles on the right
+- Choose the volume from a menu of levels, see the current speed on the speed button, and have every player menu open above its button
+- Skip backward and forward by 10 seconds instead of 5
+- Keep the player controls on screen while the pointer rests on them
+- Remove the Continue Watching section from the sidebar; resume positions and watched marks are kept
+- Remove the previous and next video buttons; the media keys and Now Playing still move through a folder, and a video still goes on to the next when it ends
 - Add Live Text to a paused video: text in the picture, subtitles included, can be selected, copied, translated and looked up
 - Add chapters: marks on the timeline where each begins, Next and Previous Chapter in the Playback menu and on Page Down and Page Up, and the chapter in the Now Playing panel
 - Fix oversaturated colours on wide-gamut displays such as a MacBook Pro's: videos now match QuickTime's colours, and follow a window moved to another display
