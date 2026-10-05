@@ -37,6 +37,9 @@ struct FilePlayerView: View {
         // black above it and sit off-centre on the screen.
         .ignoresSafeArea()
         .background {
+            FileWindowTitleBar(state: appModel.playerState)
+        }
+        .background {
             ActivePlayerTracker(
                 target: PlayerTarget(appModel: appModel)
             )
@@ -53,5 +56,19 @@ struct FilePlayerView: View {
             return
         }
         appModel.play(url, from: [url], directory: nil)
+    }
+}
+
+/// Fades the window's title bar, which lies over the top of the picture, in
+/// and out with the controls.
+///
+/// Its own view, observing the player, so that the clock ticking does not
+/// re-evaluate the whole window several times a second.
+private struct FileWindowTitleBar: View {
+    @ObservedObject var state: PlayerState
+
+    var body: some View {
+        TitleBarAutoHide(isShown: !state.hasMedia || state.areControlsShown)
+            .frame(width: 0, height: 0)
     }
 }

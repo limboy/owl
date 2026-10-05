@@ -70,6 +70,12 @@ private struct PlayerLayout: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .background {
+            // Over the picture the traffic lights come and go with the
+            // controls, so fullscreen is a click away whenever they are up.
+            TitleBarAutoHide(isShown: !isPlayerPresented || state.areControlsShown)
+                .frame(width: 0, height: 0)
+        }
         .onChange(of: state.hasMedia, initial: true) { _, hasMedia in
             guard !isDismissing else { return }
             let id = UUID()

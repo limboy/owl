@@ -77,6 +77,9 @@ struct AudioTrack: Identifiable, Equatable, Sendable {
 @MainActor
 final class PlayerState: ObservableObject {
     @Published var isPaused = true
+    /// Whether the controls over the picture are up. The window's title bar
+    /// comes and goes with them, so it is published for the window to follow.
+    @Published var areControlsShown = true
     @Published var isMuted = false
     @Published var isLoading = false
     @Published var currentTime: Double = 0

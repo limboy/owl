@@ -224,8 +224,9 @@ struct PlayerContainerView: View {
         .onChange(of: state.noticeRevision) { _, _ in
             showNotice()
         }
-        .onChange(of: controlsVisible) { _, _ in
+        .onChange(of: controlsVisible, initial: true) { _, isVisible in
             updateCursorVisibility()
+            state.areControlsShown = isVisible
         }
         .onDisappear {
             hideTask?.cancel()

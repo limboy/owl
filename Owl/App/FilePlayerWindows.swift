@@ -75,8 +75,11 @@ final class FilePlayerWindows {
 private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     private static let frameAutosaveName = "FilePlayerWindowFrame"
 
+    /// The picture runs the full height of the window, with the title bar
+    /// laid over its top, so the title bar can fade with the controls rather
+    /// than leave a strip of window behind it.
     private static let windowedStyleMask: NSWindow.StyleMask = [
-        .titled, .closable, .miniaturizable, .resizable
+        .titled, .closable, .miniaturizable, .resizable, .fullSizeContentView
     ]
 
     /// The floor a window is held to before the video's shape is taken into
@@ -475,16 +478,6 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         if frameBeforeFullScreen == nil {
             frameBeforeFullScreen = window.frame
         }
-        // For the length of the fullscreen session the window's content is its
-        // whole frame, with the title bar floating over the top of the picture
-        // rather than sitting above it. It buys the picture the title bar's
-        // height of screen in fullscreen, and — because AppKit measures a
-        // window on its way in and out of fullscreen by its content — it is
-        // what keeps the two animations from each landing a title bar's height
-        // away from where the window really goes.
-        window.styleMask.insert(.fullSizeContentView)
-        // Noted after the style change, so it is the frame AppKit will hand
-        // back on the way out and the exit animation can land exactly on it.
         fullScreenAnimator.rememberWindowedFrame(of: window)
     }
 
@@ -494,21 +487,14 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         let session = fullScreenSession
         fullScreenAnimator.whenSettled { [weak self] in
             guard let self, session == fullScreenSession else { return }
-            restoreTitleBarAbovePicture()
+            restoreWindowedFrame()
             applyVideoAspectRatio(videoAspectRatio)
         }
     }
 
-    /// Puts the title bar back above the picture and the window back on the
-    /// frame it had before fullscreen.
-    ///
-    /// The frame is set explicitly because AppKit does not restore it: adding
-    /// `.fullSizeContentView` on the way in shrinks the frame to the picture,
-    /// and taking it away keeps the frame and shrinks the picture under the
-    /// returning title bar instead, so every trip through fullscreen would
-    /// leave the window a title bar's height smaller than it went in.
-    private func restoreTitleBarAbovePicture() {
-        window.styleMask.remove(.fullSizeContentView)
+    /// Puts the window back on the frame it had before fullscreen, which the
+    /// custom exit animation does not leave it on reliably by itself.
+    private func restoreWindowedFrame() {
         if let frame = frameBeforeFullScreen {
             window.setFrame(frame, display: true)
         }
@@ -539,7 +525,7 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
 
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
         fullScreenAnimator.settleWindowed(window)
-        restoreTitleBarAbovePicture()
+        restoreWindowedFrame()
         applyVideoAspectRatio(videoAspectRatio)
     }
 
