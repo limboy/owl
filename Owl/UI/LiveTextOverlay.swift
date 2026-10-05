@@ -28,12 +28,16 @@ struct LiveTextOverlay: NSViewRepresentable {
     /// Whether there is a still picture to read: a file open, paused, loaded.
     let isActive: Bool
     let frame: LiveTextFrame
+    /// Told when the Live Text button is switched on to pick out the text in
+    /// the picture, and off again.
+    var onHighlightChange: (Bool) -> Void = { _ in }
 
     func makeNSView(context: Context) -> LiveTextOverlayView {
         LiveTextOverlayView()
     }
 
     func updateNSView(_ nsView: LiveTextOverlayView, context: Context) {
+        nsView.onHighlightChange = onHighlightChange
         nsView.update(videoView: videoView, isActive: isActive, frame: frame)
     }
 
@@ -57,9 +61,18 @@ final class LiveTextOverlayView: NSView {
     /// What the overlay's analysis was read from, or is being read from.
     private var analyzed: (picture: LiveTextFrame, size: NSSize)?
     private var analysisTask: Task<Void, Never>?
+    var onHighlightChange: (Bool) -> Void = { _ in }
+    /// Whether the Live Text button has the picture's text picked out.
+    private var isHighlighting = false {
+        didSet {
+            guard oldValue != isHighlighting else { return }
+            onHighlightChange(isHighlighting)
+        }
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        overlay.delegate = self
         overlay.preferredInteractionTypes = .automatic
         // Clear of the controls along the bottom and the close button and
         // title along the top, so the Live Text button is never under either.
@@ -104,6 +117,9 @@ final class LiveTextOverlayView: NSView {
         analysisTask = nil
         analyzed = nil
         overlay.analysis = nil
+        // Without an analysis there is no button, and nothing picked out;
+        // the overlay does not say so itself.
+        isHighlighting = false
     }
 
     private func refresh() {
@@ -130,5 +146,14 @@ final class LiveTextOverlayView: NSView {
             ), !Task.isCancelled else { return }
             self?.overlay.analysis = analysis
         }
+    }
+}
+
+extension LiveTextOverlayView: ImageAnalysisOverlayViewDelegate {
+    func overlayView(
+        _ overlayView: ImageAnalysisOverlayView,
+        highlightSelectedItemsDidChange highlightSelectedItems: Bool
+    ) {
+        isHighlighting = highlightSelectedItems
     }
 }

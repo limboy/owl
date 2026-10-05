@@ -51,6 +51,12 @@ struct PlayerContainerView: View {
     /// up under it, since it hangs off the title and would go when it does.
     @State private var isQueueListOpen = false
 
+    /// Whether the Live Text button has the paused picture's text picked out.
+    /// The controls stay down for as long as it does — the text being read is
+    /// in the picture, some of it under where the controls would be — and come
+    /// back once it is switched off.
+    @State private var isPickingOutText = false
+
     init(
         appModel: AppModel,
         engine: MPVPlayerEngine,
@@ -87,7 +93,8 @@ struct PlayerContainerView: View {
                     time: state.currentTime,
                     subtitleID: state.selectedSubtitleID,
                     subtitleDelay: state.subtitleDelay
-                )
+                ),
+                onHighlightChange: { isPickingOutText = $0 }
             )
 
             if !state.hasMedia {
@@ -196,7 +203,10 @@ struct PlayerContainerView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
             openMenuCount += 1
             hideTask?.cancel()
-            controlsVisible = true
+            // A menu over picked-out text is the text's own: copy, look up.
+            if !isPickingOutText {
+                controlsVisible = true
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
             openMenuCount = max(0, openMenuCount - 1)
@@ -207,6 +217,14 @@ struct PlayerContainerView: View {
         // is what is being looked at.
         .onChange(of: state.isPaused) { _, _ in
             revealControls()
+        }
+        .onChange(of: isPickingOutText) { _, isPicking in
+            if isPicking {
+                hideTask?.cancel()
+                controlsVisible = false
+            } else {
+                revealControls()
+            }
         }
         .onChange(of: isQueueListOpen) { _, isOpen in
             if isOpen {
@@ -444,7 +462,8 @@ struct PlayerContainerView: View {
 
     private func pointerOverControlsChanged(_ isOver: Bool) {
         isPointerOverControls = isOver
-        if isOver {
+        // Hidden, the bar still reports the pointer over where it would be.
+        if isOver, !isPickingOutText {
             hideTask?.cancel()
             controlsVisible = true
         } else {
@@ -453,6 +472,7 @@ struct PlayerContainerView: View {
     }
 
     private func revealControls() {
+        guard !isPickingOutText else { return }
         controlsVisible = true
         scheduleControlsHide()
     }
