@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-05
+- Click the video's name in the player to see the folder's other videos and jump to one, with shuffle and repeat right there; they're no longer in the browser's … menu
+- Move the timeline to the bottom of the player controls
+- Draw the player controls, video list, notices and timeline preview in Liquid Glass
+- Hide a single video window's title bar along with the player controls
+- Hide the controls while paused too, as soon as the pointer leaves the window, and while Live Text is picking out text
+- Fix single video windows that could be shrunk until the controls were cut off
+
 ## [1.4.0] - 2026-10-04
 - Rework the player controls into two rows: the timeline across the top, play/pause with the time beside it, the video's name in the middle, and volume, audio, speed and subtitles on the right
 - Choose the volume from a menu of levels, see the current speed on the speed button, and have every player menu open above its button
