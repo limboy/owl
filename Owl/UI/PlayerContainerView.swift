@@ -47,6 +47,11 @@ struct PlayerContainerView: View {
     /// keeps them up for as long as it rests there.
     @State private var isPointerOverControls = false
 
+    /// Whether the pointer is over the player at all. Leaving it takes the
+    /// controls away almost at once rather than after the usual wait: they
+    /// are for the picture, and the pointer has gone elsewhere.
+    @State private var isPointerInPlayer = false
+
     /// Whether the list of the queue is open from the title. The controls stay
     /// up under it, since it hangs off the title and would go when it does.
     @State private var isQueueListOpen = false
@@ -195,9 +200,13 @@ struct PlayerContainerView: View {
                 // open, and this is what puts it right if an end of tracking
                 // ever goes missing.
                 openMenuCount = 0
+                isPointerInPlayer = true
                 revealControls()
             case .ended:
-                scheduleControlsHide()
+                // The window's title bar lies over the top of the picture
+                // but is not part of this view; moving onto it is not leaving.
+                isPointerInPlayer = isPointerInWindow
+                scheduleControlsHide(soon: !isPointerInPlayer)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
@@ -263,6 +272,15 @@ struct PlayerContainerView: View {
         .background {
             PlayerKeyboardMonitor(handle: handle)
                 .frame(width: 0, height: 0)
+            WindowPointerMonitor { isInside in
+                isPointerInPlayer = isInside
+                if isInside {
+                    revealControls()
+                } else {
+                    scheduleControlsHide(soon: true)
+                }
+            }
+            .frame(width: 0, height: 0)
         }
     }
 
@@ -467,8 +485,14 @@ struct PlayerContainerView: View {
             hideTask?.cancel()
             controlsVisible = true
         } else {
-            scheduleControlsHide()
+            // Off the bar and out of the player in the same move.
+            scheduleControlsHide(soon: !isPointerInPlayer)
         }
+    }
+
+    private var isPointerInWindow: Bool {
+        guard let window = videoView.window else { return false }
+        return window.frame.contains(NSEvent.mouseLocation)
     }
 
     private func revealControls() {
@@ -490,12 +514,17 @@ struct PlayerContainerView: View {
         NSCursor.setHiddenUntilMouseMoves(!controlsVisible && isFullScreen)
     }
 
-    private func scheduleControlsHide() {
+    /// Hides the controls after a while, or — `soon`, for the pointer leaving
+    /// the player — after a moment. Not at once even then: opening a menu
+    /// takes the pointer out of the window too, and the menu is only known
+    /// about a moment after the pointer has gone.
+    private func scheduleControlsHide(soon: Bool = false) {
         hideTask?.cancel()
         guard !isSeeking, openMenuCount == 0, !isPointerOverControls, !isQueueListOpen
         else { return }
+        let delay: Duration = soon ? .milliseconds(150) : .seconds(2.5)
         hideTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2.5))
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled, !isSeeking, !isPointerOverControls, !isQueueListOpen
             else { return }
             controlsVisible = false
@@ -1021,6 +1050,68 @@ extension View {
                 }
                 .environment(\.colorScheme, .dark)
                 .allowsHitTesting(false)
+        }
+    }
+}
+
+/// Tells when the pointer comes into the window and leaves it, from anywhere
+/// in it.
+///
+/// The player's own hover only covers the player: the title bar laid over the
+/// top of the picture is not part of it, and a pointer that comes in or goes
+/// out across the title bar never tells the player.
+private struct WindowPointerMonitor: NSViewRepresentable {
+    let onChange: @MainActor (_ isInside: Bool) -> Void
+
+    func makeNSView(context: Context) -> MonitorView {
+        let view = MonitorView()
+        view.onChange = onChange
+        return view
+    }
+
+    func updateNSView(_ nsView: MonitorView, context: Context) {
+        nsView.onChange = onChange
+    }
+
+    final class MonitorView: NSView {
+        var onChange: @MainActor (_ isInside: Bool) -> Void = { _ in }
+        private var trackingArea: NSTrackingArea?
+        private weak var trackedView: NSView?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let trackingArea {
+                trackedView?.removeTrackingArea(trackingArea)
+            }
+            trackingArea = nil
+            // The window's frame view, which takes in the title bar as well
+            // as the content: the whole window, edge to edge.
+            guard let frameView = window?.contentView?.superview else { return }
+            let area = NSTrackingArea(
+                rect: .zero,
+                options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self,
+                userInfo: nil
+            )
+            frameView.addTrackingArea(area)
+            trackingArea = area
+            trackedView = frameView
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            onChange(true)
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            onChange(false)
+        }
+
+        override func removeFromSuperview() {
+            if let trackingArea {
+                trackedView?.removeTrackingArea(trackingArea)
+            }
+            trackingArea = nil
+            super.removeFromSuperview()
         }
     }
 }
