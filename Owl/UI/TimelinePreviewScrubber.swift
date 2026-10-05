@@ -295,8 +295,7 @@ struct TimelinePreviewScrubber: View {
                 .foregroundStyle(.white)
         }
         .padding(5)
-        .background(.black.opacity(0.88), in: RoundedRectangle(cornerRadius: 7))
-        .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
+        .playerPanel(cornerRadius: 10)
     }
 
     private func timeString(_ seconds: Double) -> String {

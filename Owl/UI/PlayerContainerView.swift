@@ -161,14 +161,13 @@ struct PlayerContainerView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: 34, height: 34)
-                        .background {
+                        .glassEffect(.regular.tint(.black.opacity(0.35)).interactive(), in: Circle())
+                        .overlay {
                             Circle()
-                                .fill(Color.black.opacity(0.72))
-                                .background(.ultraThinMaterial, in: Circle())
-                                .overlay {
-                                    Circle().strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
-                                }
+                                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+                                .allowsHitTesting(false)
                         }
+                        .environment(\.colorScheme, .dark)
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -356,7 +355,7 @@ struct PlayerContainerView: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
-        .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
+        .playerPanel(cornerRadius: 14)
     }
 
     private func noticeBar(_ fraction: Double) -> some View {
@@ -501,11 +500,14 @@ private struct PlayerControlsView: View {
             buttonRow
             seekSlider
                 .frame(minWidth: 80)
+                // Its preview of a frame rises over the buttons above it, and
+                // has to be drawn over them, not under.
+                .zIndex(1)
         }
         .padding(.horizontal, 14)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
+        .playerPanel(cornerRadius: 14)
         // A click anywhere on the bar puts the list away too, alongside
         // whatever the click was for. Not the title's: that is its own toggle.
         .contentShape(Rectangle())
@@ -817,7 +819,7 @@ private struct PlayerQueueList: View {
             }
         }
         .frame(width: 340, height: listHeight)
-        .playerPanel(cornerRadius: 14, shadowRadius: 16, shadowOffset: 6)
+        .playerPanel(cornerRadius: 14)
     }
 
     /// Tall enough for the whole queue, up to a point.
@@ -970,24 +972,36 @@ private func playerTimeString(_ seconds: Double) -> String {
     return String(format: "%02d:%02d", minutes, remainingSeconds)
 }
 
-private extension View {
+extension View {
     /// The panel every floating piece of the player is drawn on: the controls,
-    /// the title, the error banner, the indicator. One recipe rather than four
-    /// copies of it, so they cannot drift apart.
-    func playerPanel(
-        cornerRadius: CGFloat,
-        shadowRadius: CGFloat = 12,
-        shadowOffset: CGFloat = 4
-    ) -> some View {
+    /// the list of the queue, the error banner, the indicator, the preview of a
+    /// frame over the timeline. One recipe rather than five copies of it, so
+    /// they cannot drift apart.
+    ///
+    /// Liquid Glass, tinted dark and drawn in its dark appearance: the text
+    /// and symbols on it are white, and have to stay legible over a bright
+    /// frame as much as over a black one. The glass's own rim all but
+    /// disappears against black — a letterbox, a dark scene — so a light
+    /// line traces it.
+    ///
+    /// The glass and its line are a background, under the panel's contents,
+    /// rather than an effect applied to them: glass draws what it is applied
+    /// to in a layer of its own, and anything rising out of the panel — the
+    /// preview of a frame over the timeline — then had the line across it.
+    func playerPanel(cornerRadius: CGFloat) -> some View {
         background {
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(Color.black.opacity(0.72))
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+                .fill(.clear)
+                .glassEffect(
+                    .regular.tint(.black.opacity(0.35)),
+                    in: RoundedRectangle(cornerRadius: cornerRadius)
+                )
                 .overlay {
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+                        .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
                 }
+                .environment(\.colorScheme, .dark)
+                .allowsHitTesting(false)
         }
-        .shadow(color: .black.opacity(0.4), radius: shadowRadius, y: shadowOffset)
     }
 }
