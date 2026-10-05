@@ -26,7 +26,9 @@ struct FilePlayerView: View {
                 )
             }
         }
-        .frame(minWidth: 480, minHeight: 300)
+        // No taller than the window's own floor: a view taller than the window
+        // it is in is cut off at the top and bottom, and the controls with it.
+        .frame(minWidth: 480, minHeight: 270)
         .background(Color.black)
         .preferredColorScheme(.dark)
         // In fullscreen the window's content is the whole screen, title bar

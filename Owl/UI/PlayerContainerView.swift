@@ -145,7 +145,7 @@ struct PlayerContainerView: View {
                     .allowsHitTesting(controlsVisible)
                     .onHover(perform: pointerOverControlsChanged)
                     .padding(.horizontal, 18)
-                    .padding(.bottom, 14)
+                    .padding(.bottom, 18)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }

@@ -75,13 +75,13 @@ final class FilePlayerWindows {
 private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     private static let frameAutosaveName = "FilePlayerWindowFrame"
 
-    /// The floor a window is held to before the video's shape is taken into
-    /// account: small enough to tuck a picture into a corner of the screen,
-    /// large enough for the controls laid over it.
     private static let windowedStyleMask: NSWindow.StyleMask = [
         .titled, .closable, .miniaturizable, .resizable
     ]
 
+    /// The floor a window is held to before the video's shape is taken into
+    /// account: small enough to tuck a picture into a corner of the screen,
+    /// large enough for the controls laid over it.
     private static let minimumContentWidth: CGFloat = 480
     private static let minimumContentHeight: CGFloat = 270
 
@@ -89,6 +89,17 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     private let window: NSWindow
     private let onClose: () -> Void
     private var cancellables = Set<AnyCancellable>()
+
+    /// The smallest the window's content may be, kept here rather than only
+    /// read back from `contentMinSize`: something in AppKit or the hosting
+    /// controller resets that to zero after it is set, and a window held to
+    /// the video's ratio can then be dragged down to its traffic lights.
+    private var minimumContentSize = NSSize(
+        width: minimumContentWidth,
+        height: minimumContentHeight
+    ) {
+        didSet { window.contentMinSize = minimumContentSize }
+    }
 
     /// The shape the window keeps outside fullscreen, once mpv has reported the
     /// picture's, and nil until then.
@@ -179,7 +190,11 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
     /// controller sizes its window to the view it is given and would undo any
     /// frame set before it.
     func place(after cascadePoint: NSPoint?) -> NSPoint {
-        if !window.setFrameUsingName(Self.frameAutosaveName) {
+        if window.setFrameUsingName(Self.frameAutosaveName) {
+            // A frame saved below the floor — by a version that did not hold
+            // the window to it — would open with the controls cut off.
+            window.setFrame(heldAboveMinimum(window.frame), display: false)
+        } else {
             window.setContentSize(NSSize(width: 960, height: 540))
             window.center()
         }
@@ -238,6 +253,42 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
             .store(in: &cancellables)
     }
 
+    /// Holds a resize to `minimumContentSize`.
+    ///
+    /// AppKit leaves the minimum to the window while it keeps the video's
+    /// shape, and gives way on it: dragged by a corner, a window held to a
+    /// ratio goes below its minimum, and the controls over the picture are
+    /// cut off at both sides.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        guard !sender.styleMask.contains(.fullScreen) else { return frameSize }
+        return heldAboveMinimum(NSRect(origin: sender.frame.origin, size: frameSize)).size
+    }
+
+    /// `frame` grown until its content is no smaller than `minimumContentSize`,
+    /// anchored at its top-left corner, where the title bar the window is
+    /// dragged by sits. Held to the video's shape, the minimum already has
+    /// that shape and is taken whole; the size being dragged to need not.
+    private func heldAboveMinimum(_ frame: NSRect) -> NSRect {
+        let content = Self.contentSize(ofFrame: frame)
+        let minimum = minimumContentSize
+        guard content.width < minimum.width || content.height < minimum.height else {
+            return frame
+        }
+
+        let held = videoAspectRatio == nil
+            ? NSSize(width: max(content.width, minimum.width), height: max(content.height, minimum.height))
+            : minimum
+        var grown = NSWindow.frameRect(
+            forContentRect: NSRect(origin: .zero, size: NSSize(
+                width: held.width.rounded(.up),
+                height: held.height.rounded(.up)
+            )),
+            styleMask: Self.windowedStyleMask
+        )
+        grown.origin = NSPoint(x: frame.minX, y: frame.maxY - grown.height)
+        return keptOnScreen(grown)
+    }
+
     func windowWillClose(_ notification: Notification) {
         revealFallback?.cancel()
         cancellables.removeAll()
@@ -281,14 +332,14 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         videoAspectRatio = ratio
         guard let ratio, ratio.isFinite, ratio > 0 else {
             clearContentAspectRatio()
-            window.contentMinSize = NSSize(
+            minimumContentSize = NSSize(
                 width: Self.minimumContentWidth,
                 height: Self.minimumContentHeight
             )
             return
         }
 
-        window.contentMinSize = Self.minimumContentSize(for: ratio)
+        minimumContentSize = Self.minimumContentSize(for: ratio)
         // Fullscreen is the screen's shape, not the video's. The constraint,
         // and the frame that goes with it, are put back on the way out.
         guard !window.styleMask.contains(.fullScreen) else { return }
@@ -354,7 +405,7 @@ private final class FilePlayerWindowController: NSObject, NSWindowDelegate {
         }
         var height = width / ratio
 
-        let minimum = window.contentMinSize
+        let minimum = minimumContentSize
         if width < minimum.width || height < minimum.height {
             let scale = max(minimum.width / width, minimum.height / height)
             width *= scale
