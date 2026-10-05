@@ -202,13 +202,11 @@ struct PlayerContainerView: View {
             openMenuCount = max(0, openMenuCount - 1)
             scheduleControlsHide()
         }
-        .onChange(of: state.isPaused) { _, isPaused in
-            if isPaused {
-                hideTask?.cancel()
-                controlsVisible = true
-            } else {
-                scheduleControlsHide()
-            }
+        // Pausing or playing shows the controls, to show which it is now,
+        // and they go again after the usual wait — paused or not, the picture
+        // is what is being looked at.
+        .onChange(of: state.isPaused) { _, _ in
+            revealControls()
         }
         .onChange(of: isQueueListOpen) { _, isOpen in
             if isOpen {
@@ -474,11 +472,11 @@ struct PlayerContainerView: View {
 
     private func scheduleControlsHide() {
         hideTask?.cancel()
-        guard !state.isPaused, !isSeeking, openMenuCount == 0, !isPointerOverControls, !isQueueListOpen
+        guard !isSeeking, openMenuCount == 0, !isPointerOverControls, !isQueueListOpen
         else { return }
         hideTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2.5))
-            guard !Task.isCancelled, !state.isPaused, !isSeeking, !isPointerOverControls, !isQueueListOpen
+            guard !Task.isCancelled, !isSeeking, !isPointerOverControls, !isQueueListOpen
             else { return }
             controlsVisible = false
         }
