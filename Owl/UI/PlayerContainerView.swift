@@ -613,19 +613,14 @@ private struct PlayerControlsView: View {
         weight: Font.Weight,
         help: String
     ) -> some View {
-        let isLit = hoveredPanelButton == panel || openPanel == panel
-        return Button {
+        Button {
             openPanel = openPanel == panel ? nil : panel
         } label: {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: weight))
                 .foregroundStyle(.white)
                 .frame(width: 24, height: 22)
-                .background {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(isLit ? 0.14 : 0))
-                        .padding(-3)
-                }
+                .playerHighlight(isActive: openPanel == panel, inset: Self.buttonHighlightInset)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -636,7 +631,6 @@ private struct PlayerControlsView: View {
                 hoveredPanelButton = nil
             }
         }
-        .animation(.easeOut(duration: 0.12), value: isLit)
         .help(help)
         .accessibilityLabel(help)
     }
@@ -763,6 +757,10 @@ private struct PlayerControlsView: View {
         }
     }
 
+    /// How far a button's highlight reaches past its symbol, the same for
+    /// every button in the bar.
+    static let buttonHighlightInset: CGFloat = -3
+
     private func controlButton(
         _ symbol: String,
         size: CGFloat = 15,
@@ -774,7 +772,8 @@ private struct PlayerControlsView: View {
             Image(systemName: symbol)
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(foregroundStyle)
-                .frame(width: 24, height: 24)
+                .frame(width: 24, height: 22)
+                .playerHighlight(inset: Self.buttonHighlightInset)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -791,8 +790,6 @@ private struct PlayerQueueList: View {
     @ObservedObject var appModel: AppModel
     @ObservedObject var queue: PlaybackQueue
     let onPick: () -> Void
-
-    @State private var hoveredVideo: URL?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -877,10 +874,7 @@ private struct PlayerQueueList: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(isOn ? 1 : 0.45))
                 .frame(width: 28, height: 26)
-                .background {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(isOn ? 0.14 : 0))
-                }
+                .playerHighlight(isActive: isOn)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -919,27 +913,11 @@ private struct PlayerQueueList: View {
             }
             .padding(.horizontal, 6)
             .frame(height: 28)
-            .background {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(rowFill(isCurrent: isCurrent, isHovered: hoveredVideo == video))
-            }
+            .playerHighlight(isActive: isCurrent)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { isOver in
-            if isOver {
-                hoveredVideo = video
-            } else if hoveredVideo == video {
-                hoveredVideo = nil
-            }
-        }
         .help(video.lastPathComponent)
-    }
-
-    /// The same white wash as the title's hover: lighter for the pointer,
-    /// fuller for the video that is playing.
-    private func rowFill(isCurrent: Bool, isHovered: Bool) -> Color {
-        Color.white.opacity(isCurrent ? 0.14 : isHovered ? 0.08 : 0)
     }
 }
 
@@ -971,7 +949,35 @@ private func playerTimeString(_ seconds: Double) -> String {
     return String(format: "%02d:%02d", minutes, remainingSeconds)
 }
 
+/// The one highlight every button and row over the picture shows: a faint
+/// wash under the pointer, a fuller one for what is open, on or chosen, and
+/// both together for the pointer over that.
+private struct PlayerHighlight: ViewModifier {
+    let isActive: Bool
+    let inset: CGFloat
+
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.white.opacity((isActive ? 0.14 : 0) + (isHovered ? 0.08 : 0)))
+                    .padding(inset)
+                    .allowsHitTesting(false)
+            }
+            .onHover { isHovered = $0 }
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+            .animation(.easeOut(duration: 0.12), value: isActive)
+    }
+}
+
 extension View {
+    /// See `PlayerHighlight`. `inset` reaches the highlight past the view's
+    /// edges, for a symbol drawn smaller than the button it is.
+    func playerHighlight(isActive: Bool = false, inset: CGFloat = 0) -> some View {
+        modifier(PlayerHighlight(isActive: isActive, inset: inset))
+    }
     /// The panel every floating piece of the player is drawn on: the controls,
     /// the list of the queue, the error banner, the indicator, the preview of a
     /// frame over the timeline. One recipe rather than five copies of it, so

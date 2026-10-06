@@ -31,6 +31,7 @@ struct PlayerMenuButton<Label: View>: View {
             anchor.open(items())
         } label: {
             label()
+                .playerHighlight(inset: -3)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

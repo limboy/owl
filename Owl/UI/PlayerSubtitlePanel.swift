@@ -24,10 +24,7 @@ struct PlayerSubtitlePanel: View {
 
     /// Read from the defaults so the panel follows the switch as it is flipped.
     @AppStorage(SubtitlePreference.dualKey) private var isDual = false
-    @State private var hoveredRow: Int64?
 
-    /// The row id standing for "Off", which no mpv track has.
-    private static let offRowID: Int64 = -1
     private static let rowHeight: CGFloat = 28
 
     var body: some View {
@@ -37,7 +34,6 @@ struct PlayerSubtitlePanel: View {
             ScrollView {
                 VStack(spacing: 2) {
                     row(
-                        id: Self.offRowID,
                         title: "Off",
                         detail: nil,
                         mark: state.selectedSubtitleID == nil && state.secondarySubtitle == nil
@@ -125,18 +121,12 @@ struct PlayerSubtitlePanel: View {
             .foregroundStyle(Color.white.opacity(0.85))
             .padding(.horizontal, 6)
             .frame(height: Self.rowHeight)
-            .background {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(hoveredRow == Self.loadRowID ? 0.08 : 0))
-            }
+            .playerHighlight()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hover(Self.loadRowID, $0) }
         .padding(6)
     }
-
-    private static let loadRowID: Int64 = -2
 
     private func trackRow(_ track: SubtitleTrack) -> some View {
         let mark: RowMark?
@@ -148,7 +138,6 @@ struct PlayerSubtitlePanel: View {
             mark = track.isSelected ? .check : nil
         }
         return row(
-            id: track.id,
             title: track.displayName(playing: state.currentURL),
             detail: track.isExternal ? "External" : nil,
             mark: mark
@@ -175,7 +164,6 @@ struct PlayerSubtitlePanel: View {
     }
 
     private func row(
-        id: Int64,
         title: String,
         detail: String?,
         mark: RowMark?,
@@ -212,14 +200,10 @@ struct PlayerSubtitlePanel: View {
             }
             .padding(.horizontal, 6)
             .frame(height: Self.rowHeight)
-            .background {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(mark != nil ? 0.14 : hoveredRow == id ? 0.08 : 0))
-            }
+            .playerHighlight(isActive: mark != nil)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hover(id, $0) }
         .accessibilityLabel(title)
         .accessibilityValue(accessibilityValue(for: mark))
     }
@@ -230,14 +214,6 @@ struct PlayerSubtitlePanel: View {
         case .number(1): "First subtitle"
         case .number: "Second subtitle"
         case nil: ""
-        }
-    }
-
-    private func hover(_ id: Int64, _ isOver: Bool) {
-        if isOver {
-            hoveredRow = id
-        } else if hoveredRow == id {
-            hoveredRow = nil
         }
     }
 }
