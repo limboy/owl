@@ -9,7 +9,8 @@
 - Open the subtitles in a panel over the picture rather than a menu, so it stays up while tracks are picked and Dual Subtitles is switched on
 - Show folders in a grid only, and take the Grid/List switch out of the browser's toolbar
 - Make the browser's thumbnails about a third larger
-- Show a video's progress as a line inset from the bottom of its card, full once watched, and move Mark as Watched to the card's right-click menu
+- Show a video's progress as a white line inset from the bottom of its card and a check once it is watched, and move Mark as Watched to the card's right-click menu
+- Show a matched video's running time beside its series and episode under its card
 - Name a subtitle file in the subtitle menu by what follows the video's own name, such as "chs&eng", and shorten long names in the player's menus
 - Find subtitle files named for another release of the same episode or film, such as `Mad.Men.S01E01.….NOGRP.chs&eng.ass` beside `Mad Men.S01E01 - Smoke Gets in Your Eyes (… LION).mkv`, beside the video or in a Subs folder, and show one when nothing else is showing
 

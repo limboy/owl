@@ -347,18 +347,21 @@ struct FolderBrowserView: View {
             return "Folder"
         case .video:
             // A card is one line wide, so the series and episode — the thing
-            // that tells one row from the next — comes before the summary.
+            // that tells one card from the next — comes before the running
+            // time, the one fact about the file that is worth a place here.
+            let duration = library.metadata(for: entry.url)?.durationText
             if let online = onlineMetadata(for: entry) {
-                return online.subtitleLine ?? online.overview ?? entry.name
+                let parts = [online.subtitleLine, duration].compactMap { $0 }
+                return parts.isEmpty
+                    ? online.overview ?? entry.name
+                    : parts.joined(separator: " · ")
             }
-            return library.metadata(for: entry.url)?.summaryParts.first
+            return duration
+                ?? library.metadata(for: entry.url)?.summaryParts.first
                 ?? entry.url.pathExtension.uppercased()
         }
     }
 
-    /// The line under a row's title: a folder's location as before, and for a
-    /// matched video the series and episode, or the year for a film. The
-    /// description gets a line of its own below this one.
     private func select(_ root: LibraryRoot, focusSidebar: Bool = false) {
         selectedRootID = root.id
         navigate(to: root)
@@ -650,8 +653,12 @@ private struct MediaCover: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
 
-            if !isFolder, let fraction = progressFraction {
-                progressLine(fraction)
+            if !isFolder {
+                if progress?.isCompleted == true {
+                    watchedSymbol
+                } else if let fraction = progressFraction {
+                    progressLine(fraction)
+                }
             }
         }
         .clipped()
@@ -673,12 +680,24 @@ private struct MediaCover: View {
         return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    /// How much of the line to fill: as far as playback has got, all of it
-    /// once watched, and nil — no line — for a video not started.
+    /// How much of the line to fill, as far as playback has got, or nil — no
+    /// line — for a video not started. A watched one shows `watchedSymbol`.
     private var progressFraction: Double? {
-        guard let progress else { return nil }
-        if progress.isCompleted { return 1 }
+        guard let progress, !progress.isCompleted else { return nil }
         return progress.fraction > 0 ? progress.fraction : nil
+    }
+
+    /// A check in the bottom-trailing corner, in from the edges by the same
+    /// margin as the progress line it takes the place of.
+    private var watchedSymbol: some View {
+        Image(systemName: "checkmark.circle.fill")
+            .font(.system(size: 18, weight: .semibold))
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(.black.opacity(0.7), progressFillColor)
+            .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+            .padding(Self.progressInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .accessibilityHidden(true)
     }
 
     /// A rounded line inset from the bottom of the picture by the same margin

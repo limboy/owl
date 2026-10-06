@@ -17,8 +17,8 @@ struct MediaMetadata: Codable, Equatable, Sendable {
     /// all, and the running time is the one to keep longest.
     var summaryParts: [String] {
         var parts: [String] = []
-        if let duration, duration.isFinite, duration > 0 {
-            parts.append(Self.timeString(duration))
+        if let durationText {
+            parts.append(durationText)
         }
         if let width, let height, width > 0, height > 0 {
             parts.append("\(width)×\(height)")
@@ -30,6 +30,12 @@ struct MediaMetadata: Codable, Equatable, Sendable {
             parts.append(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))
         }
         return parts
+    }
+
+    /// The running time, "48:39", or nil when the file did not say.
+    var durationText: String? {
+        guard let duration, duration.isFinite, duration > 0 else { return nil }
+        return Self.timeString(duration)
     }
 
     private static func timeString(_ seconds: Double) -> String {
