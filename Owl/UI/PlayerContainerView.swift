@@ -364,8 +364,8 @@ struct PlayerContainerView: View {
             return "captions.bubble"
         case .volume(let volume, let isMuted):
             return Self.volumeSymbol(volume: volume, isMuted: isMuted)
-        case .speed:
-            return "gauge.with.dots.needle.67percent"
+        case .speed(let speed):
+            return Self.speedSymbol(speed: speed)
         case .chapter:
             return "list.bullet.rectangle"
         case .position:
@@ -420,6 +420,25 @@ struct PlayerContainerView: View {
             return "speaker.wave.2"
         }
         return "speaker.wave.3"
+    }
+
+    /// The gauge for a speed, its needle straight up at normal speed and
+    /// leaning left or right of it as playback slows down or speeds up.
+    /// Shared by the speed button and the notice, as the speaker is.
+    static func speedSymbol(speed: Double) -> String {
+        let needle: String
+        if speed < 0.75 - 0.001 {
+            needle = "0"
+        } else if speed < 1 - 0.001 {
+            needle = "33"
+        } else if speed <= 1 + 0.001 {
+            needle = "50"
+        } else if speed <= 1.5 + 0.001 {
+            needle = "67"
+        } else {
+            needle = "100"
+        }
+        return "gauge.with.dots.needle.\(needle)percent"
     }
 
     private func showNotice() {
@@ -671,19 +690,21 @@ private struct PlayerControlsView: View {
 
     private static let speedPresets: [Double] = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
-    /// The current speed, which opens the speeds to choose from.
+    /// A gauge whose needle shows the current speed, which opens the speeds
+    /// to choose from. The exact speed is in the menu and the button's help.
     private var speedMenu: some View {
-        PlayerMenuButton(help: "Playback Speed") {
+        PlayerMenuButton(help: "Playback Speed: \(playerSpeedLabel(state.speed))") {
             Self.speedPresets.map { preset in
                 .choice(playerSpeedLabel(preset), selected: abs(state.speed - preset) < 0.001) {
                     appModel.setSpeed(preset)
                 }
             }
         } label: {
-            Text(playerSpeedLabel(state.speed))
-                .font(.system(size: 12, weight: .semibold))
-                .monospacedDigit()
-                .frame(minWidth: 30, minHeight: 22)
+            Image(systemName: PlayerContainerView.speedSymbol(speed: state.speed))
+                .font(.system(size: 15))
+                .frame(width: 24, height: 22)
+                .accessibilityLabel("Playback Speed")
+                .accessibilityValue(playerSpeedLabel(state.speed))
         }
     }
 

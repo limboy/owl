@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import Owl
 
@@ -107,5 +108,26 @@ final class PlayerNoticeTests: XCTestCase {
         model.showPosition()
 
         XCTAssertEqual(model.playerState.noticeRevision, before)
+    }
+
+    /// The speed button and the speed notice draw a gauge whose needle stands
+    /// up at normal speed and leans with it either way, to its ends at the
+    /// slowest and fastest of the speeds offered.
+    func testTheSpeedGaugeLeansWithTheSpeed() {
+        let needles = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 4].map {
+            PlayerContainerView.speedSymbol(speed: $0)
+                .replacingOccurrences(of: "gauge.with.dots.needle.", with: "")
+        }
+
+        XCTAssertEqual(needles, [
+            "0percent", "0percent", "33percent", "50percent",
+            "67percent", "67percent", "100percent", "100percent",
+        ])
+        for symbol in Set(needles) {
+            XCTAssertNotNil(
+                NSImage(systemSymbolName: "gauge.with.dots.needle.\(symbol)", accessibilityDescription: nil),
+                symbol
+            )
+        }
     }
 }
