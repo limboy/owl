@@ -4,7 +4,8 @@ A native SwiftUI video player for macOS 26+ on Apple silicon, built on
 `libmpv`. It plays nearly anything — MKV, MP4, MOV, AVI, WebM, 4K HDR — with
 hardware acceleration, and needs no Homebrew to run.
 
-![](Assets/screenshots/screenshot-1.webp)
+![](Assets/screenshots/screenshot1.jpg)
+![](Assets/screenshots/screenshot2.jpg)
 
 ## Download
 
