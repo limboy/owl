@@ -377,6 +377,45 @@ final class AppModel: ObservableObject {
         // already be here; if it is not, `observePlayerState` is watching for
         // it. Whichever arrives second does the work.
         restoreSubtitleSelection(in: playerState.subtitles)
+        addDiscoveredSubtitles(for: url)
+    }
+
+    /// Adds the subtitle files beside `url` that are named for the same
+    /// episode or film without being named after the file itself, which mpv
+    /// leaves out. See `SubtitleDiscovery`.
+    ///
+    /// The folder is read off the main thread, since it may be on a network
+    /// share or a disk that has to spin up. What is found is added without
+    /// being shown, unless nothing is showing, nothing was ever chosen for
+    /// this file, and subtitles are wanted — the position mpv would have been
+    /// in had it found the file itself.
+    private func addDiscoveredSubtitles(for url: URL) {
+        let remembered = subtitleStore.selection(for: url)
+        Task.detached(priority: .utility) {
+            let found = SubtitleDiscovery.subtitles(for: url)
+            guard !found.isEmpty else { return }
+            await MainActor.run { [weak self] in
+                guard let self, self.playerState.currentURL == url else { return }
+                let loaded = Set(self.playerState.subtitles.compactMap(\.externalURL))
+                let added = found.filter { subtitle in
+                    let subtitle = subtitle.standardizedFileURL
+                    // A remembered sidecar is restored, and shown, by itself.
+                    if case .external(let rememberedURL) = remembered,
+                       rememberedURL.standardizedFileURL == subtitle {
+                        return false
+                    }
+                    return !loaded.contains(subtitle)
+                }
+                guard !added.isEmpty else { return }
+
+                let shows = remembered == nil
+                    && SubtitlePreference.isEnabled
+                    && self.playerState.selectedSubtitleID == nil
+                for (index, subtitle) in added.enumerated() {
+                    self.engine?.addSubtitle(subtitle, selects: shows && index == 0)
+                }
+            }
+        }
     }
 
     private func restoreSubtitleSelection(in tracks: [SubtitleTrack]) {

@@ -547,7 +547,13 @@ final class MPVPlayerEngine: @unchecked Sendable {
     /// existing track is `setSubtitle(id:)`, and which of the two a request
     /// needs is `SubtitleSelection.action(restoring:in:)`.
     func loadSubtitle(_ url: URL) {
-        command(["sub-add", url.path, "select"])
+        addSubtitle(url, selects: true)
+    }
+
+    /// Adds a subtitle file to the open video's tracks, showing it only if
+    /// `selects` says so. The same caution as `loadSubtitle(_:)` applies.
+    func addSubtitle(_ url: URL, selects: Bool) {
+        command(["sub-add", url.path, selects ? "select" : "auto"])
     }
 
     private func command(_ arguments: [String]) {

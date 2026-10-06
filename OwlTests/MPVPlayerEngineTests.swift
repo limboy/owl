@@ -442,6 +442,39 @@ final class MPVPlayerEngineTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(500))
     }
 
+    /// A subtitle named for another release of the same episode is one mpv
+    /// passes over, and the player adds it — and, with nothing else showing,
+    /// shows it.
+    func testASubtitleForAnotherReleaseOfTheEpisodeIsAddedAndShown() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OwlDiscovery-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let video = directory.appendingPathComponent("Show.S01E01 - Pilot (1080p x265 LION).mp4")
+        let subtitle = directory.appendingPathComponent("Show.S01E01.Pilot.1080p.BluRay-NOGRP.chs&eng.srt")
+        try FileManager.default.moveItem(at: try makeSample(), to: video)
+        try FileManager.default.moveItem(at: try makeSubtitle(), to: subtitle)
+        let progressStore = PlaybackProgressStore(storageURL: directory.appendingPathComponent("progress.json"))
+        let subtitleStore = SubtitleStateStore(storageURL: directory.appendingPathComponent("subtitles.json"))
+        let model = AppModel(folderLibrary: nil, progressStore: progressStore, subtitleStore: subtitleStore)
+        let wasEnabled = SubtitlePreference.isEnabled
+        SubtitlePreference.isEnabled = true
+        defer {
+            model.shutdown()
+            SubtitlePreference.isEnabled = wasEnabled
+            progressStore.waitForPendingWrites()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        guard model.engine != nil else { throw XCTSkip("libmpv is not available in this environment.") }
+
+        LibraryPlayerWindow(appModel: model).play(video, from: [video], directory: directory)
+        try await waitUntil { !model.playerState.subtitles.isEmpty }
+
+        let track = try XCTUnwrap(model.playerState.subtitles.first)
+        XCTAssertEqual(track.externalURL, subtitle.standardizedFileURL)
+        XCTAssertTrue(track.isSelected)
+        XCTAssertEqual(model.playerState.subtitles.count, 1)
+    }
+
     /// Chapters cross from mpv through the C shim as a node list, which only
     /// a real player reports.
     func testAFilesChaptersAreReportedInOrderWithTheirTitles() async throws {
