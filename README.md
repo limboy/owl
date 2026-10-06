@@ -1,7 +1,7 @@
 # Owl
 
 Owl is a native SwiftUI macOS video player built on `libmpv`. It targets
-macOS 14 or newer on Apple silicon. Releases bundle their own copies of
+macOS 26 or newer on Apple silicon. Releases bundle their own copies of
 `libmpv` and `ffmpeg`, so the downloaded app needs no Homebrew install to run.
 
 ![](Assets/screenshots/screenshot-1.webp)
