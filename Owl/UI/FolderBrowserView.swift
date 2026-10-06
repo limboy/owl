@@ -317,6 +317,7 @@ struct FolderBrowserView: View {
             artworkPath: online?.artworkPath,
             isFolder: entry.kind == .folder,
             progress: progress,
+            durationText: entry.kind == .video ? library.metadata(for: entry.url)?.durationText : nil,
             isEnabled: true,
             action: { open(entry) }
         )
@@ -341,24 +342,15 @@ struct FolderBrowserView: View {
         onlineMetadata(for: entry)?.displayTitle ?? entry.name
     }
 
-    private func subtitle(for entry: BrowserEntry) -> String {
+    /// The line under a card's title, or nil for none. The running time is on
+    /// the picture and an episode's series and number are in its title, so
+    /// all that is left for a video is a film's year.
+    private func subtitle(for entry: BrowserEntry) -> String? {
         switch entry.kind {
         case .folder:
             return "Folder"
         case .video:
-            // The series and episode are in the title; what is left for this
-            // line is a film's year and the running time, the one fact about
-            // the file that is worth a place here.
-            let duration = library.metadata(for: entry.url)?.durationText
-            if let online = onlineMetadata(for: entry) {
-                let parts = [online.detailLine, duration].compactMap { $0 }
-                return parts.isEmpty
-                    ? online.overview ?? entry.name
-                    : parts.joined(separator: " · ")
-            }
-            return duration
-                ?? library.metadata(for: entry.url)?.summaryParts.first
-                ?? entry.url.pathExtension.uppercased()
+            return onlineMetadata(for: entry)?.detailLine
         }
     }
 
@@ -542,11 +534,13 @@ enum CoverSource: Hashable {
 
 struct LibraryGridButton: View {
     let title: String
-    let subtitle: String
+    let subtitle: String?
     let source: CoverSource
     let artworkPath: String?
     let isFolder: Bool
     let progress: PlaybackProgress?
+    /// The running time, shown on the picture.
+    let durationText: String?
     let isEnabled: Bool
     let action: () -> Void
 
@@ -557,7 +551,8 @@ struct LibraryGridButton: View {
                     source: source,
                     artworkPath: artworkPath,
                     isFolder: isFolder,
-                    progress: progress
+                    progress: progress,
+                    durationText: durationText
                 )
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -571,12 +566,14 @@ struct LibraryGridButton: View {
                     .foregroundStyle(isEnabled ? .primary : .secondary)
                     .lineLimit(1)
 
-                Text(subtitle)
-                    .font(.subheadline)
-                    .fontWeight(.regular)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .fontWeight(.regular)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
             .contentShape(Rectangle())
         }
@@ -608,6 +605,7 @@ private struct MediaCover: View {
 
     let isFolder: Bool
     let progress: PlaybackProgress?
+    var durationText: String?
 
     /// How far the progress line sits in from the cover's left, right and
     /// bottom edges — the same on all three — and how thick it is.
@@ -654,11 +652,7 @@ private struct MediaCover: View {
             }
 
             if !isFolder {
-                if progress?.isCompleted == true {
-                    watchedSymbol
-                } else if let fraction = progressFraction {
-                    progressLine(fraction)
-                }
+                bottomRow
             }
         }
         .clipped()
@@ -681,27 +675,53 @@ private struct MediaCover: View {
     }
 
     /// How much of the line to fill, as far as playback has got, or nil — no
-    /// line — for a video not started. A watched one shows `watchedSymbol`.
+    /// line — for a video not started or already watched.
     private var progressFraction: Double? {
         guard let progress, !progress.isCompleted else { return nil }
         return progress.fraction > 0 ? progress.fraction : nil
     }
 
-    /// A check in the bottom-trailing corner, in from the edges by the same
-    /// margin as the progress line it takes the place of.
-    private var watchedSymbol: some View {
-        Image(systemName: "checkmark.circle.fill")
-            .font(.system(size: 18, weight: .semibold))
-            .symbolRenderingMode(.palette)
-            .foregroundStyle(.black.opacity(0.7), progressFillColor)
-            .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
-            .padding(Self.progressInset)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .accessibilityHidden(true)
+    private var isWatched: Bool { progress?.isCompleted == true }
+
+    /// Along the bottom of the picture, in from the edges by one margin all
+    /// round: the progress line on the leading side, and the running time in
+    /// a pill of glass on the trailing side — with a check in it once watched.
+    private var bottomRow: some View {
+        HStack(spacing: Self.progressInset) {
+            if let fraction = progressFraction {
+                progressLine(fraction)
+            } else {
+                Spacer(minLength: 0)
+            }
+            if durationText != nil || isWatched {
+                durationPill
+            }
+        }
+        .padding(Self.progressInset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
-    /// A rounded line inset from the bottom of the picture by the same margin
-    /// as from either side, filled as far as playback has got.
+    private var durationPill: some View {
+        HStack(spacing: 3) {
+            if isWatched {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .accessibilityHidden(true)
+            }
+            if let durationText {
+                Text(durationText)
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .glassEffect(.regular.tint(.black.opacity(0.3)), in: Capsule())
+        .environment(\.colorScheme, .dark)
+    }
+
+    /// A rounded line, filled as far as playback has got.
     private func progressLine(_ fraction: Double) -> some View {
         Capsule()
             .fill(progressTrackColor)
@@ -715,8 +735,6 @@ private struct MediaCover: View {
             .frame(height: Self.progressHeight)
             // Keeps the white line apart from a bright picture under it.
             .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
-            .padding(Self.progressInset)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     /// White over the picture, as the TV app draws it. In dark mode it is
