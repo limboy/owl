@@ -14,7 +14,7 @@ struct FolderBrowserView: View {
     @State private var headerOriginX: CGFloat = 0
 
     private let gridColumns = [
-        GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 18, alignment: .top)
+        GridItem(.adaptive(minimum: 260, maximum: 390), spacing: 18, alignment: .top)
     ]
 
     init(appModel: AppModel, library: FolderLibrary, player: LibraryPlayerWindow) {
