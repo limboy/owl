@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-06
+- Fix library cards for widescreen videos, such as 2:1 series or scope films, spilling under the sidebar and past the window's edge
+
 ## [1.6.0] - 2026-10-06
 - Play a video picked in the browser in a player window of its own, as the TV app does, sized to the video and leaving the browser free to look through; picking another video plays it in the same window, and closing the window stops it
 - Name the video in the player window's title bar, and open the folder's other videos from a list button at the right of the controls rather than from the video's name
