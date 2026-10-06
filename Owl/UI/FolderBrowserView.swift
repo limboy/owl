@@ -2,17 +2,11 @@ import AppKit
 import SwiftUI
 
 struct FolderBrowserView: View {
-    private enum Layout: String {
-        case grid
-        case list
-    }
-
     @ObservedObject var appModel: AppModel
     @ObservedObject private var library: FolderLibrary
 
     /// Where the videos picked here play.
     private let player: LibraryPlayerWindow
-    @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
     @State private var destination: BrowserDestination?
     @State private var didRestoreLocation = false
     @State private var pendingRootSelectionID: UUID?
@@ -21,10 +15,6 @@ struct FolderBrowserView: View {
 
     private let gridColumns = [
         GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 18, alignment: .top)
-    ]
-
-    private let listColumns = [
-        GridItem(.adaptive(minimum: 450, maximum: 900), spacing: 8, alignment: .topLeading)
     ]
 
     init(appModel: AppModel, library: FolderLibrary, player: LibraryPlayerWindow) {
@@ -54,13 +44,9 @@ struct FolderBrowserView: View {
                 .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(.container, edges: .top)
                 .toolbar {
-                    // Without the spacer the picker lands right beside the
+                    // Without the spacer the menu lands right beside the
                     // sidebar toggle, on top of the header's title.
                     ToolbarSpacer(.flexible)
-
-                    ToolbarItem(placement: .primaryAction) {
-                        layoutPicker
-                    }
 
                     ToolbarItem(placement: .primaryAction) {
                         optionsMenu
@@ -95,11 +81,6 @@ struct FolderBrowserView: View {
         .onChange(of: library.roots) { _, _ in
             synchronizeSelection()
         }
-    }
-
-    private var layout: Layout {
-        get { Layout(rawValue: storedLayout) ?? .grid }
-        nonmutating set { storedLayout = newValue.rawValue }
     }
 
     private var selectedRootID: UUID? {
@@ -179,12 +160,7 @@ struct FolderBrowserView: View {
                 } else if library.entries.isEmpty {
                     emptyFolderState
                 } else {
-                    switch layout {
-                    case .grid:
-                        grid
-                    case .list:
-                        list
-                    }
+                    grid
                 }
             }
         }
@@ -195,11 +171,10 @@ struct FolderBrowserView: View {
     /// the sidebar is collapsed.
     private static let titleBarControlsWidth: CGFloat = 196
 
-    /// How much of the trailing title bar strip the layout picker, playback
-    /// options menu take up. The header runs up under
-    /// the title bar, so the title has to stop short of these controls rather
-    /// than truncate beneath them.
-    private static let toolbarControlsWidth: CGFloat = 156
+    /// How much of the trailing title bar strip the options menu takes up.
+    /// The header runs up under the title bar, so the title has to stop short
+    /// of it rather than truncate beneath it.
+    private static let toolbarControlsWidth: CGFloat = 76
 
     private static let splitSpace = "BrowserSplit"
 
@@ -255,22 +230,6 @@ struct FolderBrowserView: View {
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.frame(in: .named(Self.splitSpace)).minX
         } action: { headerOriginX = $0 }
-    }
-
-    /// The Grid/List toggle. It lives in the window toolbar so it picks up the
-    /// system's segmented look and sits in the title bar strip beside the
-    /// window's own controls.
-    private var layoutPicker: some View {
-        Picker("Layout", selection: Binding(
-            get: { layout },
-            set: { layout = $0 }
-        )) {
-            Image(systemName: "square.grid.2x2").tag(Layout.grid)
-            Image(systemName: "list.bullet").tag(Layout.list)
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .help("Choose Grid or List View")
     }
 
     private var optionsMenu: some View {
@@ -348,19 +307,6 @@ struct FolderBrowserView: View {
         .scrollIndicators(.automatic)
     }
 
-    private var list: some View {
-        ScrollView {
-            LazyVGrid(columns: listColumns, alignment: .leading, spacing: 2) {
-                ForEach(library.entries) { entry in
-                    entryListItem(entry)
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
-            .padding(.bottom, 18)
-        }
-    }
-
     private func entryGridItem(_ entry: BrowserEntry) -> some View {
         let online = onlineMetadata(for: entry)
         return LibraryGridButton(
@@ -374,27 +320,6 @@ struct FolderBrowserView: View {
             onToggleWatched: entry.kind == .video ? { toggleWatched(entry) } : nil,
             action: { open(entry) }
         )
-        .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
-    }
-
-    private func entryListItem(_ entry: BrowserEntry) -> some View {
-        let online = onlineMetadata(for: entry)
-        return LibraryListButton(
-            title: title(for: entry),
-            subtitle: listSubtitle(for: entry, online: online),
-            source: entry.kind == .folder ? .folder(entry.url) : .video(entry.url),
-            artworkPath: online?.artworkPath,
-            isFolder: entry.kind == .folder,
-            description: online?.overview,
-            progress: entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil,
-            metadataText: entry.kind == .video
-                ? library.metadata(for: entry.url)?.summaryParts.joined(separator: "  ·  ")
-                : nil,
-            isEnabled: true,
-            onToggleWatched: entry.kind == .video ? { toggleWatched(entry) } : nil,
-            action: { open(entry) }
-        )
-        .frame(maxWidth: .infinity, alignment: .leading)
         .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
     }
 
@@ -428,13 +353,6 @@ struct FolderBrowserView: View {
     /// The line under a row's title: a folder's location as before, and for a
     /// matched video the series and episode, or the year for a film. The
     /// description gets a line of its own below this one.
-    private func listSubtitle(for entry: BrowserEntry, online: OnlineMetadata?) -> String? {
-        if entry.kind == .folder {
-            return entry.url.path
-        }
-        return online?.subtitleLine
-    }
-
     private func select(_ root: LibraryRoot, focusSidebar: Bool = false) {
         selectedRootID = root.id
         navigate(to: root)
@@ -675,133 +593,6 @@ struct LibraryGridButton: View {
                     .truncationMode(.middle)
             }
             .contentShape(Rectangle())
-        }
-        .buttonStyle(LibraryItemButtonStyle())
-        .disabled(!isEnabled)
-        .overlay(alignment: .topLeading) {
-            if isCoverHovered, let onToggleWatched {
-                WatchedToggleButton(
-                    isWatched: progress?.isCompleted == true,
-                    action: onToggleWatched
-                )
-                .offset(MediaCover.badgeOffset(in: coverFrame))
-            }
-        }
-        .coordinateSpace(.named(Self.hoverSpace))
-        .onContinuousHover(coordinateSpace: .named(Self.hoverSpace)) { phase in
-            switch phase {
-            case .active(let location):
-                isCoverHovered = coverFrame.contains(location)
-            case .ended:
-                isCoverHovered = false
-            }
-        }
-    }
-}
-
-struct LibraryListButton: View {
-    let title: String
-    let subtitle: String?
-    let source: CoverSource
-    let artworkPath: String?
-    let isFolder: Bool
-
-    /// What the catalogue says the video is about, when anything does. Given a
-    /// line of its own rather than folded into the subtitle, so a row that has
-    /// no description stays exactly the height it always was.
-    let description: String?
-
-    let progress: PlaybackProgress?
-    let metadataText: String?
-    let isEnabled: Bool
-    let onToggleWatched: (() -> Void)?
-    let action: () -> Void
-    var showsDisclosure = true
-
-    /// Where the artwork sits inside the row, and whether the pointer is in it.
-    ///
-    /// The pointer is tracked on the whole row rather than on the artwork,
-    /// because the toggle is an overlay stacked above the artwork and outside
-    /// it: an `onHover` on the artwork alone lost the pointer the instant it
-    /// crossed onto the toggle, which hid the toggle, handed the pointer back,
-    /// and flickered. One tracker on an ancestor of both, tested against the
-    /// artwork's rect, keeps the reveal scoped to the artwork without the
-    /// hand-off.
-    @State private var isCoverHovered = false
-    @State private var coverFrame: CGRect = .zero
-
-    private static let hoverSpace = "LibraryListItem"
-
-    private var showsWatchedAffordance: Bool {
-        isCoverHovered && onToggleWatched != nil
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                MediaCover(
-                    source: source,
-                    artworkPath: artworkPath,
-                    isFolder: isFolder,
-                    progress: progress,
-                    showsWatchedAffordance: showsWatchedAffordance
-                )
-                    .frame(width: 140, height: 80)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 7)
-                            .strokeBorder(Color.primary.opacity(0.08))
-                    }
-                    .onGeometryChange(for: CGRect.self) { proxy in
-                        proxy.frame(in: .named(Self.hoverSpace))
-                    } action: { coverFrame = $0 }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.title3)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(isEnabled ? .primary : .secondary)
-                        .lineLimit(1)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-
-                    if let description, !description.isEmpty {
-                        Text(description)
-                            .font(.headline)
-                            .fontWeight(.regular)
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                    } else {
-                        if let metadataText, !metadataText.isEmpty {
-                            Text(metadataText)
-                                .font(.headline)
-                                .fontWeight(.regular)
-                                .foregroundStyle(.primary)
-                                .monospacedDigit()
-                                .lineLimit(1)
-                        }
-                    }
-
-                }
-                
-                Spacer()
-
-                if showsDisclosure {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 18)
-                        .layoutPriority(1)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(LibraryItemButtonStyle())
         .disabled(!isEnabled)
