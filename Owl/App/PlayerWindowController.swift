@@ -175,12 +175,6 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
         window.representedURL = url
     }
 
-    /// Keeps the title off the title bar, for content that names the video
-    /// itself. The window is still named everywhere else.
-    func hideTitleText() {
-        window.titleVisibility = .hidden
-    }
-
     /// Makes the window visible and lets its file play. Once only.
     private func reveal() {
         guard !isRevealed else { return }

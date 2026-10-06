@@ -10,8 +10,7 @@ struct FilePlayerView: View {
     @ObservedObject var appModel: AppModel
 
     var body: some View {
-        // The window's own title bar names this file already.
-        PlayerWindowContent(appModel: appModel, showsTitle: false)
+        PlayerWindowContent(appModel: appModel)
             .onAppear(perform: start)
             // A window that opened onto the setup screen has nothing to play until
             // libmpv is found; playing then is what the retry was for.
@@ -30,13 +29,13 @@ struct FilePlayerView: View {
 ///
 /// It shows the folder window's own player, so the queue, the browser's
 /// highlight of the playing row and the progress all carry on as they would
-/// with the picture in the browser. The controls name the video, and a click
-/// on the name lists the rest of the folder.
+/// with the picture in the browser. The list button in the controls shows the
+/// rest of the folder.
 struct LibraryPlayerView: View {
     @ObservedObject var appModel: AppModel
 
     var body: some View {
-        PlayerWindowContent(appModel: appModel, showsTitle: true)
+        PlayerWindowContent(appModel: appModel)
     }
 }
 
@@ -44,7 +43,6 @@ struct LibraryPlayerView: View {
 /// top of the picture.
 private struct PlayerWindowContent: View {
     @ObservedObject var appModel: AppModel
-    let showsTitle: Bool
 
     var body: some View {
         Group {
@@ -52,8 +50,7 @@ private struct PlayerWindowContent: View {
                 PlayerContainerView(
                     appModel: appModel,
                     engine: engine,
-                    videoView: videoView,
-                    showsTitle: showsTitle
+                    videoView: videoView
                 )
             } else {
                 LibMPVSetupView(

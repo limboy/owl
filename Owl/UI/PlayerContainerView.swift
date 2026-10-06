@@ -6,14 +6,6 @@ struct PlayerContainerView: View {
     let engine: MPVPlayerEngine
     let videoView: OwlVideoView
 
-    /// Whether to name the video in the middle of the controls.
-    ///
-    /// Only for a host that has covered the window's own title bar with the
-    /// player. A window opened on one file keeps its title bar — floating over
-    /// the picture, and revealed by the pointer in full screen — and that title
-    /// bar already carries the file's name and its icon, so a second copy of
-    /// the name laid over the top of the video says nothing new.
-    let showsTitle: Bool
     let isVideoSurfaceActive: Bool
 
     @ObservedObject private var state: PlayerState
@@ -44,8 +36,8 @@ struct PlayerContainerView: View {
     /// are for the picture, and the pointer has gone elsewhere.
     @State private var isPointerInPlayer = false
 
-    /// Whether the list of the queue is open from the title. The controls stay
-    /// up under it, since it hangs off the title and would go when it does.
+    /// Whether the list of the queue is open from its button. The controls
+    /// stay up under it, since it hangs off them and would go when they do.
     @State private var isQueueListOpen = false
 
     /// Whether the Live Text button has the paused picture's text picked out.
@@ -58,13 +50,11 @@ struct PlayerContainerView: View {
         appModel: AppModel,
         engine: MPVPlayerEngine,
         videoView: OwlVideoView,
-        showsTitle: Bool = true,
         isVideoSurfaceActive: Bool = true
     ) {
         self.appModel = appModel
         self.engine = engine
         self.videoView = videoView
-        self.showsTitle = showsTitle
         self.isVideoSurfaceActive = isVideoSurfaceActive
         _state = ObservedObject(wrappedValue: appModel.playerState)
     }
@@ -137,7 +127,6 @@ struct PlayerContainerView: View {
                         appModel: appModel,
                         engine: engine,
                         state: state,
-                        showsTitle: showsTitle,
                         isSeeking: $isSeeking,
                         seekValue: $seekValue,
                         isQueueListOpen: $isQueueListOpen
@@ -501,12 +490,11 @@ private struct PlayerControlsView: View {
     @ObservedObject var appModel: AppModel
     let engine: MPVPlayerEngine
     @ObservedObject var state: PlayerState
-    let showsTitle: Bool
     @Binding var isSeeking: Bool
     @Binding var seekValue: Double
     @Binding var isQueueListOpen: Bool
 
-    @State private var isTitleHovered = false
+    @State private var isQueueButtonHovered = false
 
     var body: some View {
         VStack(spacing: 6) {
@@ -522,20 +510,22 @@ private struct PlayerControlsView: View {
         .padding(.bottom, 8)
         .playerPanel(cornerRadius: 14)
         // A click anywhere on the bar puts the list away too, alongside
-        // whatever the click was for. Not the title's: that is its own toggle.
+        // whatever the click was for. Not the list button's: that is its own
+        // toggle.
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().onEnded {
-            if isQueueListOpen, !isTitleHovered {
+            if isQueueListOpen, !isQueueButtonHovered {
                 isQueueListOpen = false
             }
         })
         .overlay(alignment: .top) {
             // Drawn over the picture rather than in a popover, so it is the
             // same dark panel as the controls it opens from. It hangs from a
-            // line along the top of the bar, and so grows upwards from there.
+            // line along the top of the bar, and so grows upwards from there,
+            // at the bar's right-hand end, above the button that opens it.
             Color.clear
                 .frame(height: 0)
-                .overlay(alignment: .bottom) {
+                .overlay(alignment: .bottomTrailing) {
                     if isQueueListOpen, appModel.playbackQueue.videos.count > 1 {
                         PlayerQueueList(appModel: appModel, queue: appModel.playbackQueue) {
                             isQueueListOpen = false
@@ -548,12 +538,9 @@ private struct PlayerControlsView: View {
         .animation(.easeOut(duration: 0.15), value: isQueueListOpen)
     }
 
-    /// Play/pause and the time on the left, the title in the middle, volume,
-    /// tracks, speed and subtitles on the right.
-    ///
-    /// The two sides take equal shares of whatever the title leaves, so the
-    /// title stays centred above the timeline for as long as both fit in
-    /// their halves.
+    /// Play/pause and the time on the left; volume, tracks, speed, subtitles
+    /// and the folder's videos on the right. The window's title bar names the
+    /// video.
     private var buttonRow: some View {
         HStack(spacing: 12) {
             HStack(spacing: 10) {
@@ -563,53 +550,40 @@ private struct PlayerControlsView: View {
             .fixedSize()
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if showsTitle, let title = state.currentTitle {
-                titleView(title)
-            }
-
             HStack(spacing: 12) {
                 volumeMenu
                 secondaryControls
+                if appModel.playbackQueue.videos.count > 1 {
+                    queueButton
+                }
             }
             .fixedSize()
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
-    private func titleText(_ title: String) -> some View {
-        Text(title)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .truncationMode(.middle)
-    }
-
-    /// The name of the video. Playing through a folder, it is also the way
-    /// into the rest of the folder: a click lists the videos around this one,
-    /// with shuffle and repeat beside them.
-    @ViewBuilder
-    private func titleView(_ title: String) -> some View {
-        if appModel.playbackQueue.videos.count > 1 {
-            Button {
-                isQueueListOpen.toggle()
-            } label: {
-                titleText(title)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(isTitleHovered || isQueueListOpen ? 0.14 : 0))
-                    }
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .onHover { isTitleHovered = $0 }
-            .animation(.easeOut(duration: 0.12), value: isTitleHovered)
-            .help(title)
-        } else {
-            titleText(title)
-                .help(title)
+    /// Lists the videos around this one, playing through a folder, with
+    /// shuffle and repeat beside them. Lit while the list is open.
+    private var queueButton: some View {
+        Button {
+            isQueueListOpen.toggle()
+        } label: {
+            Image(systemName: "list.bullet")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 22)
+                .background {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(isQueueButtonHovered || isQueueListOpen ? 0.14 : 0))
+                        .padding(-3)
+                }
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .onHover { isQueueButtonHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isQueueButtonHovered)
+        .help("Videos in This Folder")
+        .accessibilityLabel("Videos in This Folder")
     }
 
     private var playPauseButton: some View {

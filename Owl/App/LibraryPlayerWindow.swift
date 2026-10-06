@@ -44,9 +44,6 @@ final class LibraryPlayerWindow {
         ) { [weak self] in
             self?.controller = nil
         }
-        // The controls name the video, and their name is the one that lists
-        // the rest of the folder; a second copy above them says nothing new.
-        controller.hideTitleText()
         _ = controller.place(after: nil)
         self.controller = controller
         return controller
