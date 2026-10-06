@@ -607,10 +607,9 @@ private struct MediaCover: View {
     let progress: PlaybackProgress?
     var durationText: String?
 
-    /// How far the progress line sits in from the cover's left, right and
-    /// bottom edges — the same on all three — and how thick it is.
-    static let progressInset: CGFloat = 8
-    static let progressHeight: CGFloat = 4
+    /// How far the running-time pill sits in from the cover's trailing and
+    /// bottom edges.
+    static let badgeInset: CGFloat = 8
 
     @State private var image: NSImage?
     @Environment(\.colorScheme) private var colorScheme
@@ -674,8 +673,8 @@ private struct MediaCover: View {
         return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    /// How much of the line to fill, as far as playback has got, or nil — no
-    /// line — for a video not started or already watched.
+    /// How much of the pill to fill, as far as playback has got, or nil — no
+    /// fill — for a video not started or already watched.
     private var progressFraction: Double? {
         guard let progress, !progress.isCompleted else { return nil }
         return progress.fraction > 0 ? progress.fraction : nil
@@ -683,22 +682,17 @@ private struct MediaCover: View {
 
     private var isWatched: Bool { progress?.isCompleted == true }
 
-    /// Along the bottom of the picture, in from the edges by one margin all
-    /// round: the progress line on the leading side, and the running time in
-    /// a pill of glass on the trailing side — with a check in it once watched.
+    /// The running time in a pill of glass in the bottom-trailing corner. It
+    /// also says how far in the video is, with a lighter wash across it from
+    /// the leading edge as far as playback has got, and holds a check once
+    /// the video is watched.
+    @ViewBuilder
     private var bottomRow: some View {
-        HStack(spacing: Self.progressInset) {
-            if let fraction = progressFraction {
-                progressLine(fraction)
-            } else {
-                Spacer(minLength: 0)
-            }
-            if durationText != nil || isWatched {
-                durationPill
-            }
+        if durationText != nil || isWatched || progressFraction != nil {
+            durationPill
+                .padding(Self.badgeInset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         }
-        .padding(Self.progressInset)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     private var durationPill: some View {
@@ -717,36 +711,20 @@ private struct MediaCover: View {
         .foregroundStyle(.white)
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
+        // A pill with nothing to say still needs room for its wash.
+        .frame(minWidth: 36, minHeight: 18)
+        .background {
+            if let fraction = progressFraction {
+                GeometryReader { proxy in
+                    Rectangle()
+                        .fill(.white.opacity(0.42))
+                        .frame(width: proxy.size.width * fraction)
+                }
+                .clipShape(Capsule())
+            }
+        }
         .glassEffect(.regular.tint(.black.opacity(0.3)), in: Capsule())
         .environment(\.colorScheme, .dark)
-    }
-
-    /// A rounded line, filled as far as playback has got.
-    private func progressLine(_ fraction: Double) -> some View {
-        Capsule()
-            .fill(progressTrackColor)
-            .overlay(alignment: .leading) {
-                GeometryReader { proxy in
-                    Capsule()
-                        .fill(progressFillColor)
-                        .frame(width: max(Self.progressHeight, proxy.size.width * fraction))
-                }
-            }
-            .frame(height: Self.progressHeight)
-            // Keeps the white line apart from a bright picture under it.
-            .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
-    }
-
-    /// White over the picture, as the TV app draws it. In dark mode it is
-    /// toned down a little so it does not glare from a dark page, and its
-    /// track is a light wash rather than a dark one, which a dark picture
-    /// would swallow.
-    private var progressFillColor: Color {
-        colorScheme == .dark ? .white.opacity(0.88) : .white
-    }
-
-    private var progressTrackColor: Color {
-        colorScheme == .dark ? .white.opacity(0.25) : .black.opacity(0.3)
     }
 
     private var playbackAccessibilityValue: String {
