@@ -36,7 +36,7 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
     private static let minimumContentHeight: CGFloat = 270
 
     private let appModel: AppModel
-    private let window: NSWindow
+    let window: NSWindow
     private let onClose: () -> Void
     private var cancellables = Set<AnyCancellable>()
 
@@ -130,6 +130,7 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
         hostingController.sizingOptions = []
         window.contentViewController = hostingController
 
+        installPinButton()
         appModel.holdPlayback()
         observeVideoAspectRatio()
         observeRevealFallbacks()
@@ -434,9 +435,68 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
         return frame
     }
 
+    // MARK: - Keeping on top
+
+    /// Whether the window floats above other apps' windows, for a video kept
+    /// in a corner of the screen while something else is worked on. Set from
+    /// the pin at the right of the title bar.
+    private(set) var isPinned = false {
+        didSet { applyPin() }
+    }
+
+    let pinButton = NSButton()
+    private let pinAccessory = NSTitlebarAccessoryViewController()
+
+    func togglePin() {
+        isPinned.toggle()
+    }
+
+    @objc private func pinButtonClicked(_ sender: NSButton) {
+        togglePin()
+    }
+
+    /// The pin sits in the title bar, so it fades with the traffic lights and
+    /// the title as the controls come and go.
+    private func installPinButton() {
+        pinButton.bezelStyle = .accessoryBarAction
+        pinButton.isBordered = false
+        pinButton.imagePosition = .imageOnly
+        pinButton.target = self
+        pinButton.action = #selector(pinButtonClicked)
+        pinButton.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 36, height: 28))
+        container.addSubview(pinButton)
+        NSLayoutConstraint.activate([
+            pinButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            pinButton.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+        pinAccessory.view = container
+        pinAccessory.layoutAttribute = .trailing
+        window.addTitlebarAccessoryViewController(pinAccessory)
+        applyPin()
+    }
+
+    private func applyPin() {
+        let symbol = isPinned ? "pin.fill" : "pin"
+        let label = isPinned ? "Stop Keeping on Top" : "Keep on Top"
+        pinButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)?
+            .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))
+        pinButton.contentTintColor = isPinned ? .controlAccentColor : .secondaryLabelColor
+        pinButton.toolTip = label
+        pinButton.setAccessibilityLabel(label)
+        // Fullscreen is a space of its own, with nothing to float above; the
+        // window takes its level back on the way out.
+        let isFullScreen = window.styleMask.contains(.fullScreen)
+        window.level = isPinned && !isFullScreen ? .floating : .normal
+        pinAccessory.isHidden = isFullScreen
+    }
+
     // MARK: - Fullscreen
 
     func windowWillEnterFullScreen(_ notification: Notification) {
+        window.level = .normal
+        pinAccessory.isHidden = true
         // A window is asked to be the size of the screen on the way in, which
         // is a size the video's shape would otherwise refuse.
         clearContentAspectRatio()
@@ -450,6 +510,7 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowDidExitFullScreen(_ notification: Notification) {
+        applyPin()
         // The exit animation can still be running here; a frame set before it
         // lands would be undone by its last step.
         let session = fullScreenSession
@@ -492,6 +553,7 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
+        applyPin()
         fullScreenAnimator.settleWindowed(window)
         restoreWindowedFrame()
         applyVideoAspectRatio(videoAspectRatio)
