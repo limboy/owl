@@ -309,21 +309,24 @@ struct FolderBrowserView: View {
 
     private func entryGridItem(_ entry: BrowserEntry) -> some View {
         let online = onlineMetadata(for: entry)
+        let progress = entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil
         return LibraryGridButton(
             title: title(for: entry),
             subtitle: subtitle(for: entry),
             source: entry.kind == .folder ? .folder(entry.url) : .video(entry.url),
             artworkPath: online?.artworkPath,
             isFolder: entry.kind == .folder,
-            progress: entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil,
-            duration: entry.kind == .video ? library.metadata(for: entry.url)?.duration : nil,
+            progress: progress,
             isEnabled: true,
-            onToggleWatched: entry.kind == .video ? { toggleWatched(entry) } : nil,
-            onShowInFinder: { showInFinder(entry) },
-            onMoveToTrash: { moveToTrash(entry) },
             action: { open(entry) }
         )
-        .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
+        .modifier(EntryContextMenu(
+            entry: entry,
+            isWatched: progress?.isCompleted == true,
+            toggleWatched: toggleWatched,
+            showInFinder: showInFinder,
+            moveToTrash: moveToTrash
+        ))
     }
 
     private func onlineMetadata(for entry: BrowserEntry) -> OnlineMetadata? {
@@ -541,23 +544,8 @@ struct LibraryGridButton: View {
     let artworkPath: String?
     let isFolder: Bool
     let progress: PlaybackProgress?
-    /// The file's running time as the library read it, for a video that has
-    /// no progress of its own to say how long it is.
-    let duration: Double?
     let isEnabled: Bool
-    let onToggleWatched: (() -> Void)?
-    let onShowInFinder: () -> Void
-    let onMoveToTrash: () -> Void
     let action: () -> Void
-
-    /// Where the artwork sits inside the card, for the menu button to be laid
-    /// over its bottom-trailing corner.
-    ///
-    /// The button is stacked over the card rather than drawn inside it, since a
-    /// control inside the card's own button never gets the click.
-    @State private var coverFrame: CGRect = .zero
-
-    private static let coverSpace = "LibraryGridItem"
 
     var body: some View {
         Button(action: action) {
@@ -566,7 +554,7 @@ struct LibraryGridButton: View {
                     source: source,
                     artworkPath: artworkPath,
                     isFolder: isFolder,
-                    playbackState: isFolder ? nil : CardPlaybackState(progress: progress, duration: duration)
+                    progress: progress
                 )
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -574,9 +562,6 @@ struct LibraryGridButton: View {
                         RoundedRectangle(cornerRadius: 10)
                             .strokeBorder(Color.primary.opacity(0.1))
                     }
-                    .onGeometryChange(for: CGRect.self) { proxy in
-                        proxy.frame(in: .named(Self.coverSpace))
-                    } action: { coverFrame = $0 }
 
                 Text(title)
                     .font(.headline)
@@ -594,100 +579,6 @@ struct LibraryGridButton: View {
         }
         .buttonStyle(LibraryItemButtonStyle())
         .disabled(!isEnabled)
-        .overlay(alignment: .topLeading) {
-            if let onToggleWatched {
-                CardMenuButton(
-                    isWatched: progress?.isCompleted == true,
-                    onToggleWatched: onToggleWatched,
-                    onShowInFinder: onShowInFinder,
-                    onMoveToTrash: onMoveToTrash
-                )
-                .offset(MediaCover.menuOffset(in: coverFrame))
-            }
-        }
-        .coordinateSpace(.named(Self.coverSpace))
-    }
-}
-
-/// Where a video stands, as the bar along the bottom of its card shows it.
-struct CardPlaybackState: Equatable {
-    enum Kind: Equatable {
-        /// Never started: a play symbol and the running time.
-        case unstarted
-        /// Partway through: a play symbol, how far in, and the time left.
-        case inProgress(fraction: Double)
-        /// Finished: a replay symbol and the running time.
-        case watched
-    }
-
-    let kind: Kind
-    /// "29m", or nil when the length is not known yet.
-    let timeText: String?
-
-    init(progress: PlaybackProgress?, duration: Double?) {
-        let length = progress.map(\.duration).flatMap { $0 > 0 ? $0 : nil } ?? duration
-        if let progress, progress.isCompleted {
-            kind = .watched
-            timeText = length.flatMap(Self.shortText)
-        } else if let progress, progress.fraction > 0 {
-            kind = .inProgress(fraction: progress.fraction)
-            timeText = Self.shortText(progress.duration - progress.position)
-        } else {
-            kind = .unstarted
-            timeText = length.flatMap(Self.shortText)
-        }
-    }
-
-    /// "21m", "1h 5m", "2h", "<1m": a span as short as the bar has room for.
-    static func shortText(_ seconds: Double) -> String? {
-        guard seconds.isFinite, seconds > 0 else { return nil }
-        let totalMinutes = Int((seconds / 60).rounded())
-        guard totalMinutes >= 1 else { return "<1m" }
-        let hours = totalMinutes / 60
-        let minutes = totalMinutes % 60
-        if hours > 0 {
-            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
-        }
-        return "\(minutes)m"
-    }
-}
-
-/// The "…" over a video's card: marking it watched, and what its context menu
-/// offers, for anybody who does not think to right-click.
-private struct CardMenuButton: View {
-    let isWatched: Bool
-    let onToggleWatched: () -> Void
-    let onShowInFinder: () -> Void
-    let onMoveToTrash: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Menu {
-            Button(isWatched ? "Mark as Unwatched" : "Mark as Watched", action: onToggleWatched)
-            Divider()
-            Button("Show in Finder", action: onShowInFinder)
-            Divider()
-            Button("Move to Trash", role: .destructive, action: onMoveToTrash)
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(.white.opacity(isHovered ? 1 : 0.8))
-                .frame(width: MediaCover.menuSize.width, height: MediaCover.menuSize.height)
-                .background {
-                    Capsule()
-                        .fill(.white.opacity(isHovered ? 0.2 : 0))
-                }
-                .contentShape(Rectangle())
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .onHover { isHovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
-        .help("More")
-        .accessibilityLabel("More")
     }
 }
 
@@ -713,24 +604,12 @@ private struct MediaCover: View {
     var artworkPath: String?
 
     let isFolder: Bool
-    /// What the bar along the bottom shows, for a video; nil for a folder.
-    var playbackState: CardPlaybackState?
+    let progress: PlaybackProgress?
 
-    /// The bar's height, its inset from the cover's edges, and the size of the
-    /// "…" laid over its trailing end. The menu is a separate view stacked over
-    /// the cover, placed from these, so the two cannot drift apart.
-    static let barHeight: CGFloat = 26
-    static let barInset: CGFloat = 8
-    static let menuSize = CGSize(width: 30, height: 22)
-
-    /// Where the menu has to sit, in whatever space `coverFrame` was measured
-    /// in, to land on the trailing end of the bar.
-    static func menuOffset(in coverFrame: CGRect) -> CGSize {
-        CGSize(
-            width: coverFrame.maxX - barInset + 4 - menuSize.width,
-            height: coverFrame.maxY - barInset - (barHeight + menuSize.height) / 2
-        )
-    }
+    /// How far the progress line sits in from the cover's left, right and
+    /// bottom edges — the same on all three — and how thick it is.
+    static let progressInset: CGFloat = 8
+    static let progressHeight: CGFloat = 4
 
     @State private var image: NSImage?
     @Environment(\.colorScheme) private var colorScheme
@@ -771,8 +650,8 @@ private struct MediaCover: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
 
-            if let playbackState {
-                playbackBar(playbackState)
+            if !isFolder, let fraction = progressFraction {
+                progressLine(fraction)
             }
         }
         .clipped()
@@ -794,76 +673,50 @@ private struct MediaCover: View {
         return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    /// A fade up from the bottom edge, with the state on it: ↻ and the length
-    /// once watched, ▶ and how far in with the time left while partway, and
-    /// ▶ and the length before it is started. The "…" goes on its far end.
-    private func playbackBar(_ state: CardPlaybackState) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            HStack(spacing: 8) {
-                Image(systemName: state.kind == .watched ? "arrow.counterclockwise" : "play.fill")
-                    .font(.system(size: 13, weight: .bold))
+    /// How much of the line to fill: as far as playback has got, all of it
+    /// once watched, and nil — no line — for a video not started.
+    private var progressFraction: Double? {
+        guard let progress else { return nil }
+        if progress.isCompleted { return 1 }
+        return progress.fraction > 0 ? progress.fraction : nil
+    }
 
-                if case .inProgress(let fraction) = state.kind {
+    /// A rounded line inset from the bottom of the picture by the same margin
+    /// as from either side, filled as far as playback has got.
+    private func progressLine(_ fraction: Double) -> some View {
+        Capsule()
+            .fill(progressTrackColor)
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
                     Capsule()
-                        .fill(.white.opacity(0.35))
-                        .frame(width: 44, height: 5)
-                        .overlay(alignment: .leading) {
-                            Capsule()
-                                .fill(.white)
-                                .frame(width: max(5, 44 * fraction))
-                        }
+                        .fill(progressFillColor)
+                        .frame(width: max(Self.progressHeight, proxy.size.width * fraction))
                 }
+            }
+            .frame(height: Self.progressHeight)
+            // Keeps the white line apart from a bright picture under it.
+            .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
+            .padding(Self.progressInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
 
-                if let time = state.timeText {
-                    Text(time)
-                        .font(.system(size: 14, weight: .semibold))
-                        .monospacedDigit()
-                }
-                Spacer(minLength: Self.menuSize.width)
-            }
-            .foregroundStyle(.white)
-            .lineLimit(1)
-            .frame(height: Self.barHeight)
-            .padding(.horizontal, Self.barInset + 2)
-            .padding(.bottom, Self.barInset)
-            .background {
-                // The picture blurred and darkened under the bar, as the TV
-                // app's cards are, so the bar reads over any picture. Both
-                // reach well above it and fade in, so the band starts in the
-                // picture rather than at a line across it.
-                ZStack {
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .environment(\.colorScheme, .dark)
-                        .mask {
-                            LinearGradient(
-                                colors: [.clear, .black, .black],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        }
-                    LinearGradient(
-                        colors: [.clear, .black.opacity(0.25), .black.opacity(0.45)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                }
-                .padding(.top, -20)
-            }
-        }
+    /// White over the picture, as the TV app draws it. In dark mode it is
+    /// toned down a little so it does not glare from a dark page, and its
+    /// track is a light wash rather than a dark one, which a dark picture
+    /// would swallow.
+    private var progressFillColor: Color {
+        colorScheme == .dark ? .white.opacity(0.88) : .white
+    }
+
+    private var progressTrackColor: Color {
+        colorScheme == .dark ? .white.opacity(0.25) : .black.opacity(0.3)
     }
 
     private var playbackAccessibilityValue: String {
-        switch playbackState?.kind {
-        case .watched:
-            return "Watched"
-        case .inProgress(let fraction):
-            let left = playbackState?.timeText.map { ", \($0) left" } ?? ""
-            return "\(Int((fraction * 100).rounded(.down))) percent watched\(left)"
-        case .unstarted, nil:
-            return ""
-        }
+        guard !isFolder, let progress else { return "" }
+        if progress.isCompleted { return "Watched" }
+        guard progress.fraction > 0 else { return "" }
+        return "\(Int((progress.fraction * 100).rounded(.down))) percent watched"
     }
 
     private func loadImage() async -> NSImage? {
@@ -928,6 +781,8 @@ private enum FolderCoverFinder {
 
 private struct EntryContextMenu: ViewModifier {
     let entry: BrowserEntry
+    let isWatched: Bool
+    let toggleWatched: (BrowserEntry) -> Void
     let showInFinder: (BrowserEntry) -> Void
     let moveToTrash: (BrowserEntry) -> Void
 
@@ -936,6 +791,8 @@ private struct EntryContextMenu: ViewModifier {
             content
         } else {
             content.contextMenu {
+                Button(isWatched ? "Mark as Unwatched" : "Mark as Watched") { toggleWatched(entry) }
+                Divider()
                 Button("Show in Finder") { showInFinder(entry) }
                 Divider()
                 Button("Move to Trash", role: .destructive) { moveToTrash(entry) }
