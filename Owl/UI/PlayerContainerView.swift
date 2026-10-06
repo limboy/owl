@@ -36,9 +36,10 @@ struct PlayerContainerView: View {
     /// are for the picture, and the pointer has gone elsewhere.
     @State private var isPointerInPlayer = false
 
-    /// Whether the list of the queue is open from its button. The controls
-    /// stay up under it, since it hangs off them and would go when they do.
-    @State private var isQueueListOpen = false
+    /// Which panel is open over the picture from its button in the controls,
+    /// if any. The controls stay up under it, since it hangs off them and
+    /// would go when they do.
+    @State private var openPanel: PlayerPanel?
 
     /// Whether the Live Text button has the paused picture's text picked out.
     /// The controls stay down for as long as it does — the text being read is
@@ -106,12 +107,12 @@ struct PlayerContainerView: View {
                     .allowsHitTesting(false)
             }
 
-            if isQueueListOpen {
-                // Takes a click anywhere on the picture to put the list away,
+            if openPanel != nil {
+                // Takes a click anywhere on the picture to put the panel away,
                 // as a click outside a menu would.
                 Color.clear
                     .contentShape(Rectangle())
-                    .onTapGesture { isQueueListOpen = false }
+                    .onTapGesture { openPanel = nil }
             }
 
             VStack {
@@ -129,7 +130,7 @@ struct PlayerContainerView: View {
                         state: state,
                         isSeeking: $isSeeking,
                         seekValue: $seekValue,
-                        isQueueListOpen: $isQueueListOpen
+                        openPanel: $openPanel
                     )
                     .opacity(controlsVisible ? 1 : 0)
                     .offset(y: controlsVisible ? 0 : 14)
@@ -189,8 +190,8 @@ struct PlayerContainerView: View {
                 revealControls()
             }
         }
-        .onChange(of: isQueueListOpen) { _, isOpen in
-            if isOpen {
+        .onChange(of: openPanel) { _, panel in
+            if panel != nil {
                 hideTask?.cancel()
                 controlsVisible = true
             } else {
@@ -493,12 +494,12 @@ struct PlayerContainerView: View {
     /// about a moment after the pointer has gone.
     private func scheduleControlsHide(soon: Bool = false) {
         hideTask?.cancel()
-        guard !isSeeking, openMenuCount == 0, !isPointerOverControls, !isQueueListOpen
+        guard !isSeeking, openMenuCount == 0, !isPointerOverControls, openPanel == nil
         else { return }
         let delay: Duration = soon ? .milliseconds(150) : .seconds(2.5)
         hideTask = Task { @MainActor in
             try? await Task.sleep(for: delay)
-            guard !Task.isCancelled, !isSeeking, !isPointerOverControls, !isQueueListOpen
+            guard !Task.isCancelled, !isSeeking, !isPointerOverControls, openPanel == nil
             else { return }
             controlsVisible = false
         }
@@ -511,9 +512,10 @@ private struct PlayerControlsView: View {
     @ObservedObject var state: PlayerState
     @Binding var isSeeking: Bool
     @Binding var seekValue: Double
-    @Binding var isQueueListOpen: Bool
+    @Binding var openPanel: PlayerPanel?
 
-    @State private var isQueueButtonHovered = false
+    /// The panel button the pointer is over, whose click is its own toggle.
+    @State private var hoveredPanelButton: PlayerPanel?
 
     var body: some View {
         VStack(spacing: 6) {
@@ -528,13 +530,13 @@ private struct PlayerControlsView: View {
         .padding(.top, 10)
         .padding(.bottom, 8)
         .playerPanel(cornerRadius: 14)
-        // A click anywhere on the bar puts the list away too, alongside
-        // whatever the click was for. Not the list button's: that is its own
+        // A click anywhere on the bar puts the panel away too, alongside
+        // whatever the click was for. Not a panel button's: that is its own
         // toggle.
         .contentShape(Rectangle())
         .simultaneousGesture(TapGesture().onEnded {
-            if isQueueListOpen, !isQueueButtonHovered {
-                isQueueListOpen = false
+            if openPanel != nil, hoveredPanelButton == nil {
+                openPanel = nil
             }
         })
         .overlay(alignment: .top) {
@@ -545,16 +547,25 @@ private struct PlayerControlsView: View {
             Color.clear
                 .frame(height: 0)
                 .overlay(alignment: .bottomTrailing) {
-                    if isQueueListOpen, appModel.playbackQueue.videos.count > 1 {
-                        PlayerQueueList(appModel: appModel, queue: appModel.playbackQueue) {
-                            isQueueListOpen = false
+                    Group {
+                        switch openPanel {
+                        case .queue where appModel.playbackQueue.videos.count > 1:
+                            PlayerQueueList(appModel: appModel, queue: appModel.playbackQueue) {
+                                openPanel = nil
+                            }
+                        case .subtitles:
+                            PlayerSubtitlePanel(appModel: appModel, state: state) {
+                                openPanel = nil
+                            }
+                        default:
+                            EmptyView()
                         }
-                        .padding(.bottom, 8)
-                        .transition(.opacity.combined(with: .offset(y: 6)))
                     }
+                    .padding(.bottom, 8)
+                    .transition(.opacity.combined(with: .offset(y: 6)))
                 }
         }
-        .animation(.easeOut(duration: 0.15), value: isQueueListOpen)
+        .animation(.easeOut(duration: 0.15), value: openPanel)
     }
 
     /// Play/pause and the time on the left; volume, tracks, speed, subtitles
@@ -582,27 +593,52 @@ private struct PlayerControlsView: View {
     }
 
     /// Lists the videos around this one, playing through a folder, with
-    /// shuffle and repeat beside them. Lit while the list is open.
+    /// shuffle and repeat beside them.
     private var queueButton: some View {
-        Button {
-            isQueueListOpen.toggle()
+        panelButton(.queue, symbol: "list.bullet", size: 15, weight: .semibold, help: "Videos in This Folder")
+    }
+
+    /// Opens the panel of subtitle tracks, which stays up while tracks are
+    /// picked — two of them, for Dual Subtitles — until a click elsewhere.
+    private var subtitleButton: some View {
+        panelButton(.subtitles, symbol: "captions.bubble", size: 16, weight: .regular, help: "Subtitles")
+    }
+
+    /// A button that opens `panel` over the picture, and closes it again.
+    /// Lit while the panel is open.
+    private func panelButton(
+        _ panel: PlayerPanel,
+        symbol: String,
+        size: CGFloat,
+        weight: Font.Weight,
+        help: String
+    ) -> some View {
+        let isLit = hoveredPanelButton == panel || openPanel == panel
+        return Button {
+            openPanel = openPanel == panel ? nil : panel
         } label: {
-            Image(systemName: "list.bullet")
-                .font(.system(size: 15, weight: .semibold))
+            Image(systemName: symbol)
+                .font(.system(size: size, weight: weight))
                 .foregroundStyle(.white)
                 .frame(width: 24, height: 22)
                 .background {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(isQueueButtonHovered || isQueueListOpen ? 0.14 : 0))
+                        .fill(Color.white.opacity(isLit ? 0.14 : 0))
                         .padding(-3)
                 }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { isQueueButtonHovered = $0 }
-        .animation(.easeOut(duration: 0.12), value: isQueueButtonHovered)
-        .help("Videos in This Folder")
-        .accessibilityLabel("Videos in This Folder")
+        .onHover { isOver in
+            if isOver {
+                hoveredPanelButton = panel
+            } else if hoveredPanelButton == panel {
+                hoveredPanelButton = nil
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: isLit)
+        .help(help)
+        .accessibilityLabel(help)
     }
 
     private var playPauseButton: some View {
@@ -644,7 +680,7 @@ private struct PlayerControlsView: View {
                 audioMenu
             }
             speedMenu
-            subtitleMenu
+            subtitleButton
         }
     }
 
@@ -705,65 +741,6 @@ private struct PlayerControlsView: View {
                 .frame(width: 24, height: 22)
                 .accessibilityLabel("Playback Speed")
                 .accessibilityValue(playerSpeedLabel(state.speed))
-        }
-    }
-
-    /// What the subtitle button offers: whether subtitles are showing, which
-    /// track, and a way to bring in a file that is not in the folder.
-    ///
-    /// Nothing else. Everything that is a setting rather than a choice about
-    /// the file being watched — the timing, the size, the track after this one
-    /// — is in the Subtitles menu in the menu bar.
-    private var subtitleMenu: some View {
-        PlayerMenuButton(help: "Subtitles") {
-            // Radio behaviour with the tracks below it: checking this clears
-            // whichever track was checked, because mpv only ever has one
-            // subtitle selected and the checkmarks read straight from that.
-            var items: [PlayerMenuItem] = [
-                .choice(
-                    "Off",
-                    selected: state.selectedSubtitleID == nil && state.secondarySubtitle == nil
-                ) {
-                    appModel.selectSubtitle(nil)
-                },
-                .divider,
-            ]
-            let isDual = SubtitlePreference.isDualEnabled
-            if state.subtitles.isEmpty {
-                items.append(.note("No subtitles in this file"))
-            } else {
-                items += state.subtitles.map { track in
-                    let title = track.displayName(playing: state.currentURL)
-                        + (track.isExternal ? " — External" : "")
-                    // Two at once are numbered rather than checked, ❶ the
-                    // subtitle and ❷ the one beside it, in the order picked.
-                    guard isDual else {
-                        return .choice(title, selected: track.isSelected) {
-                            appModel.selectSubtitle(track)
-                        }
-                    }
-                    let number: Int? = track.isSelected ? 1 : track.isSecondary ? 2 : nil
-                    return .numbered(title, number: number) {
-                        appModel.pickDualSubtitle(track)
-                    }
-                }
-            }
-            items += [
-                .divider,
-                .choice("Dual Subtitles", selected: isDual) {
-                    appModel.toggleDualSubtitles()
-                },
-                .action("Load Subtitle…") {
-                    SubtitleFile.choose { url in
-                        appModel.loadExternalSubtitle(url)
-                    }
-                },
-            ]
-            return items
-        } label: {
-            Image(systemName: "captions.bubble")
-                .font(.system(size: 16))
-                .frame(width: 24, height: 22)
         }
     }
 

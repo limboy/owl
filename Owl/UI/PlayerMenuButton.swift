@@ -5,9 +5,6 @@ import SwiftUI
 enum PlayerMenuItem {
     /// One of a set, checked when it is the one in effect.
     case choice(String, selected: Bool, action: () -> Void)
-    /// One of a set where more than one can be in effect, in an order: marked
-    /// ❶, ❷ and so on by its place in it, or unmarked when it is not in it.
-    case numbered(String, number: Int?, action: () -> Void)
     case action(String, action: () -> Void)
     /// Text that cannot be chosen, such as there being nothing to choose.
     case note(String)
@@ -75,17 +72,6 @@ final class PlayerMenuAnchor {
         case .choice(let title, let selected, let action):
             let menuItem = actionItem(title, action: action)
             menuItem.state = selected ? .on : .off
-            return menuItem
-        case .numbered(let title, let number, let action):
-            let menuItem = actionItem(title, action: action)
-            if let number {
-                menuItem.state = .on
-                // Drawn where the checkmark would be, at the size of one.
-                menuItem.onStateImage = NSImage(
-                    systemSymbolName: "\(number).circle.fill",
-                    accessibilityDescription: "\(number)"
-                )?.withSymbolConfiguration(.init(pointSize: 12, weight: .semibold))
-            }
             return menuItem
         case .action(let title, let action):
             return actionItem(title, action: action)

@@ -5,7 +5,8 @@
 - Name the video in the player window's title bar, and open the folder's other videos from a list button at the right of the controls rather than from the video's name
 - Show the playback speed as a gauge whose needle leans with the speed, in place of the "1x" text in the controls
 - Keep a player window on top of other windows with the pin at the right of its title bar
-- Add Dual Subtitles to the subtitle menu: two tracks show at once, numbered ❶ and ❷ in the order they are picked, and later files pick a second subtitle in the same language again
+- Add Dual Subtitles: two tracks show at once, numbered ❶ and ❷ in the order they are picked, and later files pick a second subtitle in the same language again
+- Open the subtitles in a panel over the picture rather than a menu, so it stays up while tracks are picked and Dual Subtitles is switched on
 - Name a subtitle file in the subtitle menu by what follows the video's own name, such as "chs&eng", and shorten long names in the player's menus
 - Find subtitle files named for another release of the same episode or film, such as `Mad.Men.S01E01.….NOGRP.chs&eng.ass` beside `Mad Men.S01E01 - Smoke Gets in Your Eyes (… LION).mkv`, beside the video or in a Subs folder, and show one when nothing else is showing
 
