@@ -9,6 +9,7 @@
 - Open the subtitles in a panel over the picture rather than a menu, so it stays up while tracks are picked and Dual Subtitles is switched on
 - Show folders in a grid only, and take the Grid/List switch out of the browser's toolbar
 - Make the browser's thumbnails about a third larger
+- Show where a video stands along the bottom of its card, as the TV app does: ▶ and its length before it is started, ▶ with a progress bar and the time left partway through, and ↻ with its length once watched; Mark as Watched moves to a … menu on the card, beside Show in Finder and Move to Trash
 - Name a subtitle file in the subtitle menu by what follows the video's own name, such as "chs&eng", and shorten long names in the player's menus
 - Find subtitle files named for another release of the same episode or film, such as `Mad.Men.S01E01.….NOGRP.chs&eng.ass` beside `Mad Men.S01E01 - Smoke Gets in Your Eyes (… LION).mkv`, beside the video or in a Subs folder, and show one when nothing else is showing
 

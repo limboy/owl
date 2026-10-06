@@ -316,8 +316,11 @@ struct FolderBrowserView: View {
             artworkPath: online?.artworkPath,
             isFolder: entry.kind == .folder,
             progress: entry.kind == .video ? appModel.playbackProgress(for: entry.url) : nil,
+            duration: entry.kind == .video ? library.metadata(for: entry.url)?.duration : nil,
             isEnabled: true,
             onToggleWatched: entry.kind == .video ? { toggleWatched(entry) } : nil,
+            onShowInFinder: { showInFinder(entry) },
+            onMoveToTrash: { moveToTrash(entry) },
             action: { open(entry) }
         )
         .modifier(EntryContextMenu(entry: entry, showInFinder: showInFinder, moveToTrash: moveToTrash))
@@ -538,27 +541,23 @@ struct LibraryGridButton: View {
     let artworkPath: String?
     let isFolder: Bool
     let progress: PlaybackProgress?
+    /// The file's running time as the library read it, for a video that has
+    /// no progress of its own to say how long it is.
+    let duration: Double?
     let isEnabled: Bool
     let onToggleWatched: (() -> Void)?
+    let onShowInFinder: () -> Void
+    let onMoveToTrash: () -> Void
     let action: () -> Void
 
-    /// Where the artwork sits inside the card, and whether the pointer is in it.
+    /// Where the artwork sits inside the card, for the menu button to be laid
+    /// over its bottom-trailing corner.
     ///
-    /// The pointer is tracked on the whole card rather than on the artwork,
-    /// because the toggle is an overlay stacked above the artwork and outside
-    /// it: an `onHover` on the artwork alone lost the pointer the instant it
-    /// crossed onto the toggle, which hid the toggle, handed the pointer back,
-    /// and flickered. One tracker on an ancestor of both, tested against the
-    /// artwork's rect, keeps the reveal scoped to the artwork without the
-    /// hand-off.
-    @State private var isCoverHovered = false
+    /// The button is stacked over the card rather than drawn inside it, since a
+    /// control inside the card's own button never gets the click.
     @State private var coverFrame: CGRect = .zero
 
-    private static let hoverSpace = "LibraryGridItem"
-
-    private var showsWatchedAffordance: Bool {
-        isCoverHovered && onToggleWatched != nil
-    }
+    private static let coverSpace = "LibraryGridItem"
 
     var body: some View {
         Button(action: action) {
@@ -567,8 +566,7 @@ struct LibraryGridButton: View {
                     source: source,
                     artworkPath: artworkPath,
                     isFolder: isFolder,
-                    progress: progress,
-                    showsWatchedAffordance: showsWatchedAffordance
+                    playbackState: isFolder ? nil : CardPlaybackState(progress: progress, duration: duration)
                 )
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -577,7 +575,7 @@ struct LibraryGridButton: View {
                             .strokeBorder(Color.primary.opacity(0.1))
                     }
                     .onGeometryChange(for: CGRect.self) { proxy in
-                        proxy.frame(in: .named(Self.hoverSpace))
+                        proxy.frame(in: .named(Self.coverSpace))
                     } action: { coverFrame = $0 }
 
                 Text(title)
@@ -597,39 +595,99 @@ struct LibraryGridButton: View {
         .buttonStyle(LibraryItemButtonStyle())
         .disabled(!isEnabled)
         .overlay(alignment: .topLeading) {
-            if isCoverHovered, let onToggleWatched {
-                WatchedToggleButton(
+            if let onToggleWatched {
+                CardMenuButton(
                     isWatched: progress?.isCompleted == true,
-                    action: onToggleWatched
+                    onToggleWatched: onToggleWatched,
+                    onShowInFinder: onShowInFinder,
+                    onMoveToTrash: onMoveToTrash
                 )
-                .offset(MediaCover.badgeOffset(in: coverFrame))
+                .offset(MediaCover.menuOffset(in: coverFrame))
             }
         }
-        .coordinateSpace(.named(Self.hoverSpace))
-        .onContinuousHover(coordinateSpace: .named(Self.hoverSpace)) { phase in
-            switch phase {
-            case .active(let location):
-                isCoverHovered = coverFrame.contains(location)
-            case .ended:
-                isCoverHovered = false
-            }
-        }
+        .coordinateSpace(.named(Self.coverSpace))
     }
 }
 
-private struct WatchedToggleButton: View {
+/// Where a video stands, as the bar along the bottom of its card shows it.
+struct CardPlaybackState: Equatable {
+    enum Kind: Equatable {
+        /// Never started: a play symbol and the running time.
+        case unstarted
+        /// Partway through: a play symbol, how far in, and the time left.
+        case inProgress(fraction: Double)
+        /// Finished: a replay symbol and the running time.
+        case watched
+    }
+
+    let kind: Kind
+    /// "29m", or nil when the length is not known yet.
+    let timeText: String?
+
+    init(progress: PlaybackProgress?, duration: Double?) {
+        let length = progress.map(\.duration).flatMap { $0 > 0 ? $0 : nil } ?? duration
+        if let progress, progress.isCompleted {
+            kind = .watched
+            timeText = length.flatMap(Self.shortText)
+        } else if let progress, progress.fraction > 0 {
+            kind = .inProgress(fraction: progress.fraction)
+            timeText = Self.shortText(progress.duration - progress.position)
+        } else {
+            kind = .unstarted
+            timeText = length.flatMap(Self.shortText)
+        }
+    }
+
+    /// "21m", "1h 5m", "2h", "<1m": a span as short as the bar has room for.
+    static func shortText(_ seconds: Double) -> String? {
+        guard seconds.isFinite, seconds > 0 else { return nil }
+        let totalMinutes = Int((seconds / 60).rounded())
+        guard totalMinutes >= 1 else { return "<1m" }
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+        }
+        return "\(minutes)m"
+    }
+}
+
+/// The "…" over a video's card: marking it watched, and what its context menu
+/// offers, for anybody who does not think to right-click.
+private struct CardMenuButton: View {
     let isWatched: Bool
-    let action: () -> Void
+    let onToggleWatched: () -> Void
+    let onShowInFinder: () -> Void
+    let onMoveToTrash: () -> Void
+
+    @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-            Color.clear
-                .frame(width: MediaCover.badgeSize, height: MediaCover.badgeSize)
-                .contentShape(Circle())
+        Menu {
+            Button(isWatched ? "Mark as Unwatched" : "Mark as Watched", action: onToggleWatched)
+            Divider()
+            Button("Show in Finder", action: onShowInFinder)
+            Divider()
+            Button("Move to Trash", role: .destructive, action: onMoveToTrash)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(.white.opacity(isHovered ? 1 : 0.8))
+                .frame(width: MediaCover.menuSize.width, height: MediaCover.menuSize.height)
+                .background {
+                    Capsule()
+                        .fill(.white.opacity(isHovered ? 0.2 : 0))
+                }
+                .contentShape(Rectangle())
         }
+        .menuStyle(.button)
         .buttonStyle(.plain)
-        .help(isWatched ? "Mark as Unwatched" : "Mark as Watched")
-        .accessibilityLabel(isWatched ? "Mark as Unwatched" : "Mark as Watched")
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .help("More")
+        .accessibilityLabel("More")
     }
 }
 
@@ -655,22 +713,22 @@ private struct MediaCover: View {
     var artworkPath: String?
 
     let isFolder: Bool
-    let progress: PlaybackProgress?
-    var showsWatchedAffordance = false
+    /// What the bar along the bottom shows, for a video; nil for a folder.
+    var playbackState: CardPlaybackState?
 
-    /// The watched badge's size, and its inset from the artwork's top-trailing
-    /// corner. Public because the click target is a separate view stacked over
-    /// the cover: it is placed from these, so the two cannot drift apart the
-    /// way they did when the row spelled out its own numbers.
-    static let badgeSize: CGFloat = 24
-    static let badgeInset: CGFloat = 8
+    /// The bar's height, its inset from the cover's edges, and the size of the
+    /// "…" laid over its trailing end. The menu is a separate view stacked over
+    /// the cover, placed from these, so the two cannot drift apart.
+    static let barHeight: CGFloat = 26
+    static let barInset: CGFloat = 8
+    static let menuSize = CGSize(width: 30, height: 22)
 
-    /// Where a badge-sized click target has to sit, in whatever space
-    /// `coverFrame` was measured in, to land on the badge.
-    static func badgeOffset(in coverFrame: CGRect) -> CGSize {
+    /// Where the menu has to sit, in whatever space `coverFrame` was measured
+    /// in, to land on the trailing end of the bar.
+    static func menuOffset(in coverFrame: CGRect) -> CGSize {
         CGSize(
-            width: coverFrame.maxX - badgeInset - badgeSize,
-            height: coverFrame.minY + badgeInset
+            width: coverFrame.maxX - barInset + 4 - menuSize.width,
+            height: coverFrame.maxY - barInset - (barHeight + menuSize.height) / 2
         )
     }
 
@@ -713,8 +771,8 @@ private struct MediaCover: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             }
 
-            if !isFolder {
-                playbackStateOverlay
+            if let playbackState {
+                playbackBar(playbackState)
             }
         }
         .clipped()
@@ -736,56 +794,76 @@ private struct MediaCover: View {
         return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
-    private var isWatched: Bool { progress?.isCompleted == true }
+    /// A fade up from the bottom edge, with the state on it: ↻ and the length
+    /// once watched, ▶ and how far in with the time left while partway, and
+    /// ▶ and the length before it is started. The "…" goes on its far end.
+    private func playbackBar(_ state: CardPlaybackState) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                Image(systemName: state.kind == .watched ? "arrow.counterclockwise" : "play.fill")
+                    .font(.system(size: 13, weight: .bold))
 
-    @ViewBuilder
-    private var playbackStateOverlay: some View {
-        if !isWatched, let progress, progress.fraction > 0 {
-            GeometryReader { proxy in
-                VStack(spacing: 0) {
-                    Spacer()
-                    ZStack(alignment: .leading) {
-                        Rectangle()
-                            .fill(.black.opacity(0.45))
-                        Rectangle()
-                            .fill(Color.accentColor)
-                            .frame(width: proxy.size.width * progress.fraction)
-                    }
-                    .frame(height: 4)
+                if case .inProgress(let fraction) = state.kind {
+                    Capsule()
+                        .fill(.white.opacity(0.35))
+                        .frame(width: 44, height: 5)
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(.white)
+                                .frame(width: max(5, 44 * fraction))
+                        }
                 }
+
+                if let time = state.timeText {
+                    Text(time)
+                        .font(.system(size: 14, weight: .semibold))
+                        .monospacedDigit()
+                }
+                Spacer(minLength: Self.menuSize.width)
+            }
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .frame(height: Self.barHeight)
+            .padding(.horizontal, Self.barInset + 2)
+            .padding(.bottom, Self.barInset)
+            .background {
+                // The picture blurred and darkened under the bar, as the TV
+                // app's cards are, so the bar reads over any picture. Both
+                // reach well above it and fade in, so the band starts in the
+                // picture rather than at a line across it.
+                ZStack {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .environment(\.colorScheme, .dark)
+                        .mask {
+                            LinearGradient(
+                                colors: [.clear, .black, .black],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        }
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.25), .black.opacity(0.45)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+                .padding(.top, -20)
             }
         }
-
-        // The watched badge and the hover affordance are the same view in the same
-        // slot, so toggling hover never shifts the circle.
-        if isWatched || showsWatchedAffordance {
-            watchedBadge
-                .padding(Self.badgeInset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        }
-    }
-
-    @ViewBuilder
-    private var watchedBadge: some View {
-        ZStack {
-            Circle()
-                .fill(.black.opacity(0.5))
-            Circle()
-                .strokeBorder(.white.opacity(0.85), lineWidth: 1.5)
-            if isWatched {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
-        }
-        .frame(width: Self.badgeSize, height: Self.badgeSize)
     }
 
     private var playbackAccessibilityValue: String {
-        guard !isFolder, let progress else { return "" }
-        if progress.isCompleted { return "Watched" }
-        guard progress.fraction > 0 else { return "" }
-        return "\(Int((progress.fraction * 100).rounded(.down))) percent watched"
+        switch playbackState?.kind {
+        case .watched:
+            return "Watched"
+        case .inProgress(let fraction):
+            let left = playbackState?.timeText.map { ", \($0) left" } ?? ""
+            return "\(Int((fraction * 100).rounded(.down))) percent watched\(left)"
+        case .unstarted, nil:
+            return ""
+        }
     }
 
     private func loadImage() async -> NSImage? {
