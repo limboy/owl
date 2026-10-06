@@ -32,6 +32,16 @@ struct SubtitleTrack: Identifiable, Equatable, Sendable {
     }
 
     var displayName: String {
+        displayName(playing: nil)
+    }
+
+    /// The name of the track beside `video`, the file it is a subtitle for.
+    ///
+    /// A sidecar is usually named after its video, and the video's name is
+    /// most of it — the whole release name of an episode, in front of the
+    /// "chs&eng" that is the only part that differs. Beside the video playing,
+    /// only the part after the video's name is shown.
+    func displayName(playing video: URL?) -> String {
         if !title.isEmpty {
             return title
         }
@@ -40,6 +50,9 @@ struct SubtitleTrack: Identifiable, Equatable, Sendable {
         // against "Movie.zh.srt", where both would otherwise read "SRT
         // subtitle".
         if let externalURL {
+            if let video, let suffix = Self.suffix(of: externalURL, after: video) {
+                return suffix
+            }
             return externalURL.lastPathComponent
         }
         if let language, !language.isEmpty {
@@ -49,6 +62,24 @@ struct SubtitleTrack: Identifiable, Equatable, Sendable {
             return "\(codec.uppercased()) subtitle"
         }
         return "Subtitle \(id)"
+    }
+
+    /// What `sidecar`'s name adds to `video`'s: "chs&eng" for
+    /// "Show.S01E06.chs&eng.ass" beside "Show.S01E06.mkv". Nil when the
+    /// sidecar is not named after the video, or adds nothing but its type.
+    private static func suffix(of sidecar: URL, after video: URL) -> String? {
+        let stem = sidecar.deletingPathExtension().lastPathComponent
+        let videoStem = video.deletingPathExtension().lastPathComponent
+        guard !videoStem.isEmpty,
+              stem.count > videoStem.count,
+              stem.lowercased().hasPrefix(videoStem.lowercased())
+        else { return nil }
+        let rest = stem.dropFirst(videoStem.count)
+        // Only at a break in the name: "Show.S01E06" is not the video of
+        // "Show.S01E067.srt".
+        guard let separator = rest.first, ".-_ ".contains(separator) else { return nil }
+        let suffix = rest.trimmingCharacters(in: CharacterSet(charactersIn: ".-_ "))
+        return suffix.isEmpty ? nil : suffix
     }
 }
 

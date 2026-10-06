@@ -319,7 +319,9 @@ final class AppModel: ObservableObject {
         if let language = selection.language {
             SubtitlePreference.preferredLanguage = language
         }
-        playerState.announce(.subtitleTrack(track?.displayName ?? "Off"))
+        playerState.announce(.subtitleTrack(
+            track?.displayName(playing: playerState.currentURL) ?? "Off"
+        ))
     }
 
     /// Steps through the file's subtitle tracks and then off, for the key that

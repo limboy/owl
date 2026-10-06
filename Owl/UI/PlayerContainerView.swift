@@ -735,7 +735,8 @@ private struct PlayerControlsView: View {
             } else {
                 items += state.subtitles.map { track in
                     .choice(
-                        track.displayName + (track.isExternal ? " — External" : ""),
+                        track.displayName(playing: state.currentURL)
+                            + (track.isExternal ? " — External" : ""),
                         selected: track.isSelected
                     ) {
                         appModel.selectSubtitle(track)

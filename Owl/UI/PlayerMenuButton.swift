@@ -41,7 +41,7 @@ struct PlayerMenuButton<Label: View>: View {
 
 /// Holds the AppKit view the menu is opened from.
 @MainActor
-private final class PlayerMenuAnchor {
+final class PlayerMenuAnchor {
     weak var view: NSView?
 
     /// The space between the top of the button and the bottom of the menu.
@@ -76,7 +76,7 @@ private final class PlayerMenuAnchor {
         case .action(let title, let action):
             return actionItem(title, action: action)
         case .note(let title):
-            let menuItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            let menuItem = NSMenuItem(title: shortened(title), action: nil, keyEquivalent: "")
             menuItem.isEnabled = false
             return menuItem
         case .divider:
@@ -84,13 +84,33 @@ private final class PlayerMenuAnchor {
         }
     }
 
+    /// The most characters an item shows. A file name can run to a hundred,
+    /// and the menu would be as wide as the picture to fit it.
+    static let maximumTitleLength = 48
+
+    /// `title` cut down to `maximumTitleLength` in the middle, keeping both
+    /// ends: the start says what it is, and the end of a file name — a
+    /// language, its type, "External" — is often what tells two apart.
+    static func shortened(_ title: String) -> String {
+        guard title.count > maximumTitleLength else { return title }
+        let kept = maximumTitleLength - 1
+        let head = title.prefix(kept - kept / 2)
+        let tail = title.suffix(kept / 2)
+        return head.trimmingCharacters(in: .whitespaces) + "…"
+            + tail.trimmingCharacters(in: .whitespaces)
+    }
+
     private static func actionItem(_ title: String, action: @escaping () -> Void) -> NSMenuItem {
         let handler = PlayerMenuAction(action)
         let menuItem = NSMenuItem(
-            title: title,
+            title: shortened(title),
             action: #selector(PlayerMenuAction.run),
             keyEquivalent: ""
         )
+        // The whole of a title that was cut short is a pause of the pointer away.
+        if menuItem.title != title {
+            menuItem.toolTip = title
+        }
         menuItem.target = handler
         // The target is held weakly; this keeps the handler alive as long as
         // the item.

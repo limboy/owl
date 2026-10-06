@@ -155,6 +155,52 @@ final class SubtitleSelectionTests: XCTestCase {
         XCTAssertEqual(track.displayName, "Show.zh.srt")
     }
 
+    /// Beside the video it belongs to, a sidecar is named by what its file
+    /// name adds to the video's, not by the release name both share.
+    func testASidecarBesideItsVideoIsNamedByWhatItAdds() {
+        let video = URL(fileURLWithPath:
+            "/TV/Mad.Men.S01E06.Babylon.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-NOGRP.mkv")
+        let sidecar = track(
+            id: 1,
+            language: nil,
+            title: "",
+            externalURL: URL(fileURLWithPath:
+                "/TV/Mad.Men.S01E06.Babylon.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-NOGRP.chs&eng.ass")
+        )
+
+        XCTAssertEqual(sidecar.displayName(playing: video), "chs&eng")
+    }
+
+    func testASidecarNotNamedAfterTheVideoKeepsItsFileName() {
+        let video = URL(fileURLWithPath: "/TV/Show.S01E06.mkv")
+        let named: (String) -> String = { name in
+            self.track(
+                id: 1,
+                language: nil,
+                title: "",
+                externalURL: URL(fileURLWithPath: "/TV/\(name)")
+            ).displayName(playing: video)
+        }
+
+        XCTAssertEqual(named("Other.zh.srt"), "Other.zh.srt")
+        // Only at a break in the name.
+        XCTAssertEqual(named("Show.S01E067.srt"), "Show.S01E067.srt")
+        // Nothing added but its type.
+        XCTAssertEqual(named("Show.S01E06.srt"), "Show.S01E06.srt")
+    }
+
+    @MainActor
+    func testALongMenuTitleIsShortenedInTheMiddle() {
+        let title = "Mad.Men.S01E06.Babylon.1080p.BluRay.REMUX.AVC.DTS-HD.MA.5.1-NOGRP.chs&eng.ass — External"
+        let shortened = PlayerMenuAnchor.shortened(title)
+
+        XCTAssertLessThanOrEqual(shortened.count, PlayerMenuAnchor.maximumTitleLength)
+        XCTAssertTrue(shortened.hasPrefix("Mad.Men.S01E06"))
+        XCTAssertTrue(shortened.hasSuffix("— External"))
+        XCTAssertTrue(shortened.contains("…"))
+        XCTAssertEqual(PlayerMenuAnchor.shortened("English"), "English")
+    }
+
     func testALanguageCodeIsShownAsAWord() {
         XCTAssertEqual(SubtitleLanguage.displayName(for: "eng"), "English")
         XCTAssertEqual(SubtitleLanguage.displayName(for: "chi"), "Chinese")
