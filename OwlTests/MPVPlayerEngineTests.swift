@@ -21,28 +21,20 @@ final class MPVPlayerEngineTests: XCTestCase {
             progressStore: PlaybackProgressStore(storageURL: directory.appendingPathComponent("progress.json"))
         )
         let view = try XCTUnwrap(model.videoView)
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 600),
-            styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false
-        )
-        window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: ContentView(appModel: model, library: library))
-        window.orderFront(nil)
+        let player = LibraryPlayerWindow(appModel: model)
         defer {
             model.shutdown()
-            window.close()
             model.progressStore.waitForPendingWrites()
             try? FileManager.default.removeItem(at: sample)
             try? FileManager.default.removeItem(at: directory)
         }
-        try await Task.sleep(for: .milliseconds(300))
         for presentation in 1...2 {
             let clock = ContinuousClock()
             let start = clock.now
             var previous = start
             var longestGap: Duration = .zero
             let framesBefore = view.renderedFrameCount
-            model.play(sample, from: [sample], directory: sample.deletingLastPathComponent())
+            player.play(sample, from: [sample], directory: sample.deletingLastPathComponent())
             while clock.now - start < .seconds(2) {
                 try await Task.sleep(for: .milliseconds(16))
                 let now = clock.now
@@ -53,21 +45,29 @@ final class MPVPlayerEngineTests: XCTestCase {
             XCTAssertLessThan(longestGap, .milliseconds(150))
             try await waitUntil { view.renderedFrameCount > framesBefore }
             XCTAssertGreaterThan(view.renderedFrameCount, framesBefore)
+            XCTAssertNotNil(view.window, "the video should play in a window of its own")
+            XCTAssertFalse(model.playerState.isPaused, "the window should let the video play once shown")
             XCTAssertNil(model.playerState.errorMessage)
+
+            // Stopping the video from the browser's side takes its window away.
             model.closeVideo()
-            try await waitUntil { view.superview == nil }
-            XCTAssertNil(view.superview)
+            try await waitUntil { view.window == nil }
+            XCTAssertNil(view.window)
         }
 
-        // A cancelled insertion must not mount the surface from a stale
-        // animation completion or start playing again after it was closed.
-        model.play(sample, from: [sample], directory: sample.deletingLastPathComponent())
-        try await Task.sleep(for: .milliseconds(70))
-        XCTAssertNil(view.superview, "the moving shell should not contain a live OpenGL view")
-        model.closeVideo()
-        try await Task.sleep(for: .milliseconds(800))
-        XCTAssertNil(view.superview)
+        // A second video picked while the window is up plays in that window.
+        player.play(sample, from: [sample], directory: sample.deletingLastPathComponent())
+        try await waitUntil { view.window != nil }
+        let window = try XCTUnwrap(view.window)
+        player.play(sample, from: [sample], directory: sample.deletingLastPathComponent())
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertTrue(view.window === window)
+
+        // Closing the window stops the video, and leaves the player for the next.
+        window.performClose(nil)
+        try await waitUntil { view.window == nil }
         XCTAssertFalse(model.playerState.hasMedia)
+        XCTAssertNotNil(model.engine)
     }
 
     func testVideoKeepsRenderingWhileTheMainThreadIsBusy() async throws {

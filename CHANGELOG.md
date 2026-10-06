@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Play a video picked in the browser in a player window of its own, as the TV app does, sized to the video and leaving the browser free to look through; picking another video plays it in the same window, and closing the window stops it
 
 ## [1.5.0] - 2026-10-05
 - Click the video's name in the player to see the folder's other videos and jump to one, with shuffle and repeat right there; they're no longer in the browser's … menu

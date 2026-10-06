@@ -10,14 +10,50 @@ struct FilePlayerView: View {
     @ObservedObject var appModel: AppModel
 
     var body: some View {
+        // The window's own title bar names this file already.
+        PlayerWindowContent(appModel: appModel, showsTitle: false)
+            .onAppear(perform: start)
+            // A window that opened onto the setup screen has nothing to play until
+            // libmpv is found; playing then is what the retry was for.
+            .onChange(of: appModel.engine == nil) { _, _ in start() }
+    }
+
+    private func start() {
+        guard appModel.engine != nil, appModel.playerState.currentURL == nil else {
+            return
+        }
+        appModel.play(url, from: [url], directory: nil)
+    }
+}
+
+/// The window the folder window plays its videos in.
+///
+/// It shows the folder window's own player, so the queue, the browser's
+/// highlight of the playing row and the progress all carry on as they would
+/// with the picture in the browser. The controls name the video, and a click
+/// on the name lists the rest of the folder.
+struct LibraryPlayerView: View {
+    @ObservedObject var appModel: AppModel
+
+    var body: some View {
+        PlayerWindowContent(appModel: appModel, showsTitle: true)
+    }
+}
+
+/// The player filling a window of its own, with the title bar laid over the
+/// top of the picture.
+private struct PlayerWindowContent: View {
+    @ObservedObject var appModel: AppModel
+    let showsTitle: Bool
+
+    var body: some View {
         Group {
             if let engine = appModel.engine, let videoView = appModel.videoView {
                 PlayerContainerView(
                     appModel: appModel,
                     engine: engine,
                     videoView: videoView,
-                    // The window's own title bar names this file already.
-                    showsTitle: false
+                    showsTitle: showsTitle
                 )
             } else {
                 LibMPVSetupView(
@@ -37,7 +73,7 @@ struct FilePlayerView: View {
         // black above it and sit off-centre on the screen.
         .ignoresSafeArea()
         .background {
-            FileWindowTitleBar(state: appModel.playerState)
+            PlayerWindowTitleBar(state: appModel.playerState)
         }
         .background {
             ActivePlayerTracker(
@@ -45,17 +81,6 @@ struct FilePlayerView: View {
             )
             .frame(width: 0, height: 0)
         }
-        .onAppear(perform: start)
-        // A window that opened onto the setup screen has nothing to play until
-        // libmpv is found; playing then is what the retry was for.
-        .onChange(of: appModel.engine == nil) { _, _ in start() }
-    }
-
-    private func start() {
-        guard appModel.engine != nil, appModel.playerState.currentURL == nil else {
-            return
-        }
-        appModel.play(url, from: [url], directory: nil)
     }
 }
 
@@ -64,7 +89,7 @@ struct FilePlayerView: View {
 ///
 /// Its own view, observing the player, so that the clock ticking does not
 /// re-evaluate the whole window several times a second.
-private struct FileWindowTitleBar: View {
+private struct PlayerWindowTitleBar: View {
     @ObservedObject var state: PlayerState
 
     var body: some View {

@@ -10,14 +10,8 @@ struct FolderBrowserView: View {
     @ObservedObject var appModel: AppModel
     @ObservedObject private var library: FolderLibrary
 
-    /// Whether a video is up, passed in rather than read from `PlayerState`.
-    ///
-    /// The browser stays in the hierarchy underneath the picture, so observing
-    /// the player would re-evaluate this whole view — split view, toolbar,
-    /// sidebar and every row in the folder — each time the clock ticks, several
-    /// times a second, for the entire time a video plays. It is the position
-    /// that moves that often; whether there is a video at all changes twice.
-    private let hasMedia: Bool
+    /// Where the videos picked here play.
+    private let player: LibraryPlayerWindow
     @AppStorage("FolderBrowserLayout") private var storedLayout = Layout.grid.rawValue
     @State private var destination: BrowserDestination?
     @State private var didRestoreLocation = false
@@ -33,9 +27,9 @@ struct FolderBrowserView: View {
         GridItem(.adaptive(minimum: 450, maximum: 900), spacing: 8, alignment: .topLeading)
     ]
 
-    init(appModel: AppModel, library: FolderLibrary, hasMedia: Bool) {
+    init(appModel: AppModel, library: FolderLibrary, player: LibraryPlayerWindow) {
         self.appModel = appModel
-        self.hasMedia = hasMedia
+        self.player = player
         _library = ObservedObject(wrappedValue: library)
     }
 
@@ -72,11 +66,6 @@ struct FolderBrowserView: View {
                         optionsMenu
                     }
                 }
-                // The toolbar is drawn in the title bar, above the content, so
-                // a picture that covers the window would still be picked at by
-                // the layout control. There is no layout to choose while the
-                // video is up.
-                .toolbar(hasMedia ? .hidden : .automatic, for: .windowToolbar)
         }
         .navigationSplitViewStyle(.balanced)
         .coordinateSpace(.named(Self.splitSpace))
@@ -521,13 +510,11 @@ struct FolderBrowserView: View {
                 library.openFolder(entry.url)
             }
         case .video:
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
-                appModel.play(
-                    entry.url,
-                    from: library.visibleVideos,
-                    directory: library.currentDirectory
-                )
-            }
+            player.play(
+                entry.url,
+                from: library.visibleVideos,
+                directory: library.currentDirectory
+            )
         }
     }
 
@@ -556,7 +543,7 @@ struct FolderBrowserView: View {
         if videos.count == 1, let video = videos.first {
             openStandalone(video)
         } else if let video = videos.first {
-            appModel.play(video, from: videos, directory: video.deletingLastPathComponent())
+            player.play(video, from: videos, directory: video.deletingLastPathComponent())
         }
         return added || !videos.isEmpty
     }

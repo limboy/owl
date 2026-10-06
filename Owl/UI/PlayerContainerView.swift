@@ -16,14 +16,6 @@ struct PlayerContainerView: View {
     let showsTitle: Bool
     let isVideoSurfaceActive: Bool
 
-    /// Dismisses the current video, if this host has somewhere to dismiss it
-    /// to. Hosts that pass nothing are shown no close button.
-    ///
-    /// The player owns the request but not the teardown: a host that slides
-    /// the picture away wants the video to travel with it, so it runs its own
-    /// animation and stops playback once that has finished.
-    let onClose: (@MainActor () -> Void)?
-
     @ObservedObject private var state: PlayerState
     @State private var controlsVisible = true
     @State private var isSeeking = false
@@ -43,8 +35,8 @@ struct PlayerContainerView: View {
     /// survive the submenu closing.
     @State private var openMenuCount = 0
 
-    /// Whether the pointer is over the control bar or the close button, which
-    /// keeps them up for as long as it rests there.
+    /// Whether the pointer is over the control bar, which keeps it up for as
+    /// long as it rests there.
     @State private var isPointerOverControls = false
 
     /// Whether the pointer is over the player at all. Leaving it takes the
@@ -67,15 +59,13 @@ struct PlayerContainerView: View {
         engine: MPVPlayerEngine,
         videoView: OwlVideoView,
         showsTitle: Bool = true,
-        isVideoSurfaceActive: Bool = true,
-        onClose: (@MainActor () -> Void)? = nil
+        isVideoSurfaceActive: Bool = true
     ) {
         self.appModel = appModel
         self.engine = engine
         self.videoView = videoView
         self.showsTitle = showsTitle
         self.isVideoSurfaceActive = isVideoSurfaceActive
-        self.onClose = onClose
         _state = ObservedObject(wrappedValue: appModel.playerState)
     }
 
@@ -165,31 +155,6 @@ struct PlayerContainerView: View {
             .animation(.easeOut(duration: 0.18), value: state.hasMedia)
             .animation(.easeOut(duration: 0.18), value: state.errorMessage)
             .animation(.easeOut(duration: 0.18), value: noticeVisible)
-        }
-        .overlay(alignment: .topTrailing) {
-            if let onClose, state.hasMedia {
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .glassEffect(.regular.tint(.black.opacity(0.35)).interactive(), in: Circle())
-                        .overlay {
-                            Circle()
-                                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
-                                .allowsHitTesting(false)
-                        }
-                        .environment(\.colorScheme, .dark)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .help("Close Video")
-                .onHover(perform: pointerOverControlsChanged)
-                .accessibilityLabel("Close Video")
-                .opacity(controlsVisible ? 1 : 0)
-                .allowsHitTesting(controlsVisible)
-                .padding(16)
-            }
         }
         .animation(.easeOut(duration: 0.18), value: controlsVisible)
         .onContinuousHover { phase in

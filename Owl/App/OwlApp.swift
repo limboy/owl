@@ -13,6 +13,10 @@ struct OwlApp: App {
     /// window's and a window opened on one file has neither.
     private let library: FolderLibrary
 
+    /// Where the browser's videos play. Held beside the library for the same
+    /// reason: it is the folder window's, and there is only one of it.
+    private let libraryPlayer: LibraryPlayerWindow
+
     #if canImport(Sparkle)
     #if DEBUG
     private let updaterController = SPUStandardUpdaterController(
@@ -33,19 +37,19 @@ struct OwlApp: App {
         SidebarToolbarPlacement.beginClaimingSidebarPlacement()
         let library = FolderLibrary()
         self.library = library
-        _appModel = StateObject(wrappedValue: AppModel(folderLibrary: library))
+        let appModel = AppModel(folderLibrary: library)
+        _appModel = StateObject(wrappedValue: appModel)
+        libraryPlayer = LibraryPlayerWindow(appModel: appModel)
     }
 
     var body: some Scene {
         WindowGroup("Owl") {
-            ContentView(appModel: appModel, library: library)
+            ContentView(appModel: appModel, library: library, player: libraryPlayer)
                 .frame(minWidth: 720, minHeight: 560)
                 .background {
                     WindowFrameAutosave(key: "MainWindowFrame")
                         .frame(width: 0, height: 0)
                     WindowTitleHidden()
-                        .frame(width: 0, height: 0)
-                    FullScreenTransition(playerState: appModel.playerState)
                         .frame(width: 0, height: 0)
                 }
         }
