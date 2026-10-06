@@ -25,13 +25,20 @@ struct OnlineMetadata: Codable, Equatable, Sendable {
     /// stays the caller's decision.
     var artworkPath: String?
 
-    /// The line the browser shows under the title when there is nothing more
-    /// specific to show. The series comes first for an episode because that is
-    /// what tells one row from the next in a folder of them.
-    var subtitleLine: String? {
-        if let episodeLabel { return episodeLabel }
-        if let year { return String(year) }
-        return nil
+    /// The name the browser gives the video: for an episode, the series and
+    /// the episode ahead of the episode's own title — "Mad Men · S1E1 · Smoke
+    /// Gets in Your Eyes" — since the series is what tells one card from the
+    /// next in a folder of them; for a film, its title.
+    var displayTitle: String {
+        guard let episodeLabel else { return title }
+        return "\(episodeLabel) · \(title)"
+    }
+
+    /// What the browser says under the title besides the running time: the
+    /// year, for a film. An episode's series and number are in its title.
+    var detailLine: String? {
+        guard episodeLabel == nil, let year else { return nil }
+        return String(year)
     }
 }
 

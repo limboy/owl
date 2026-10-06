@@ -338,7 +338,7 @@ struct FolderBrowserView: View {
     /// release name is a description of an encode; the catalogue's title is the
     /// thing somebody meant to watch.
     private func title(for entry: BrowserEntry) -> String {
-        onlineMetadata(for: entry)?.title ?? entry.name
+        onlineMetadata(for: entry)?.displayTitle ?? entry.name
     }
 
     private func subtitle(for entry: BrowserEntry) -> String {
@@ -346,12 +346,12 @@ struct FolderBrowserView: View {
         case .folder:
             return "Folder"
         case .video:
-            // A card is one line wide, so the series and episode — the thing
-            // that tells one card from the next — comes before the running
-            // time, the one fact about the file that is worth a place here.
+            // The series and episode are in the title; what is left for this
+            // line is a film's year and the running time, the one fact about
+            // the file that is worth a place here.
             let duration = library.metadata(for: entry.url)?.durationText
             if let online = onlineMetadata(for: entry) {
-                let parts = [online.subtitleLine, duration].compactMap { $0 }
+                let parts = [online.detailLine, duration].compactMap { $0 }
                 return parts.isEmpty
                     ? online.overview ?? entry.name
                     : parts.joined(separator: " · ")
