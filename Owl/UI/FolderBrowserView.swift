@@ -624,14 +624,21 @@ private struct MediaCover: View {
 
     var body: some View {
         ZStack {
+            // The picture fills the shape as an overlay so it never sizes the
+            // cover: filled straight into the stack, a frame wider than 16:9
+            // (a 2:1 or scope film) would widen the cover, and the grid cell
+            // with it, past its column.
             Rectangle()
                 .fill(placeholderFill)
+                .overlay {
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    }
+                }
 
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
+            if image == nil {
                 Image(systemName: isFolder ? "folder.fill" : "film")
                     .font(.system(size: isFolder ? 34 : 30, weight: .medium))
                     .foregroundStyle(isFolder ? Color.accentColor : .secondary)
