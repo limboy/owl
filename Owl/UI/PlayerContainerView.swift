@@ -720,26 +720,39 @@ private struct PlayerControlsView: View {
             // whichever track was checked, because mpv only ever has one
             // subtitle selected and the checkmarks read straight from that.
             var items: [PlayerMenuItem] = [
-                .choice("Off", selected: state.selectedSubtitleID == nil) {
+                .choice(
+                    "Off",
+                    selected: state.selectedSubtitleID == nil && state.secondarySubtitle == nil
+                ) {
                     appModel.selectSubtitle(nil)
                 },
                 .divider,
             ]
+            let isDual = SubtitlePreference.isDualEnabled
             if state.subtitles.isEmpty {
                 items.append(.note("No subtitles in this file"))
             } else {
                 items += state.subtitles.map { track in
-                    .choice(
-                        track.displayName(playing: state.currentURL)
-                            + (track.isExternal ? " — External" : ""),
-                        selected: track.isSelected
-                    ) {
-                        appModel.selectSubtitle(track)
+                    let title = track.displayName(playing: state.currentURL)
+                        + (track.isExternal ? " — External" : "")
+                    // Two at once are numbered rather than checked, ❶ the
+                    // subtitle and ❷ the one beside it, in the order picked.
+                    guard isDual else {
+                        return .choice(title, selected: track.isSelected) {
+                            appModel.selectSubtitle(track)
+                        }
+                    }
+                    let number: Int? = track.isSelected ? 1 : track.isSecondary ? 2 : nil
+                    return .numbered(title, number: number) {
+                        appModel.pickDualSubtitle(track)
                     }
                 }
             }
             items += [
                 .divider,
+                .choice("Dual Subtitles", selected: isDual) {
+                    appModel.toggleDualSubtitles()
+                },
                 .action("Load Subtitle…") {
                     SubtitleFile.choose { url in
                         appModel.loadExternalSubtitle(url)

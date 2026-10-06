@@ -94,3 +94,30 @@ extension SubtitleSelection {
         return next < tracks.endIndex ? tracks[next] : nil
     }
 }
+
+/// Which two tracks show in Dual Subtitles, and what a click on one does.
+///
+/// The numbers the menu puts beside them follow the order they were clicked
+/// in: the first picked is ❶, the subtitle proper, and the next is ❷. A third
+/// pick keeps the two most recent, so ❷ moves up to ❶ and the new one is ❷.
+/// Clicking a numbered track takes it away, and a ❷ left alone moves up.
+struct DualSubtitlePair: Equatable, Sendable {
+    var first: Int64?
+    var second: Int64?
+
+    func clicking(_ id: Int64) -> DualSubtitlePair {
+        if id == first {
+            return DualSubtitlePair(first: second, second: nil)
+        }
+        if id == second {
+            return DualSubtitlePair(first: first, second: nil)
+        }
+        guard let first else {
+            return DualSubtitlePair(first: id, second: second)
+        }
+        guard let second else {
+            return DualSubtitlePair(first: first, second: id)
+        }
+        return DualSubtitlePair(first: second, second: id)
+    }
+}

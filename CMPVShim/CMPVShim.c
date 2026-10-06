@@ -834,6 +834,24 @@ int mvp_mpv_copy_subtitle_tracks(
         return status;
     }
 
+    // Which track is the subtitle and which the second one. mpv's track list
+    // marks both "selected", so the two are asked for by role. A role with no
+    // track fails to read, and leaves its id at zero, which no track has.
+    int64_t primary_id = 0;
+    int64_t secondary_id = 0;
+    bool knows_roles = player->get_property(
+        player->handle, "current-tracks/sub/id", MPV_FORMAT_INT64, &primary_id
+    ) >= 0;
+    player->get_property(
+        player->handle, "current-tracks/sub2/id", MPV_FORMAT_INT64, &secondary_id
+    );
+    // A libmpv too old for current-tracks answers neither. Its track list is
+    // the only word on selection there, and a second subtitle cannot be told
+    // from the first.
+    if (!knows_roles && secondary_id == 0) {
+        primary_id = -1;
+    }
+
     int count = 0;
     if (track_list.format == MPV_FORMAT_NODE_ARRAY && track_list.value.list != NULL) {
         mpv_node_list *items = track_list.value.list;
@@ -846,7 +864,12 @@ int mvp_mpv_copy_subtitle_tracks(
                 MVPMPVSubtitleTrack *track = &tracks[count];
                 memset(track, 0, sizeof(*track));
                 track->id = node_int64(map_value(item, "id"));
-                track->selected = node_flag(map_value(item, "selected"));
+                if (primary_id < 0) {
+                    track->selected = node_flag(map_value(item, "selected"));
+                } else {
+                    track->selected = track->id == primary_id;
+                    track->secondary = track->id == secondary_id;
+                }
                 track->external = node_flag(map_value(item, "external"));
                 copy_text(track->title, sizeof(track->title), node_string(map_value(item, "title")));
                 copy_text(track->language, sizeof(track->language), node_string(map_value(item, "lang")));

@@ -34,6 +34,15 @@ enum SubtitlePreference {
     /// how big text has to be to be read from the sofa is about the sofa.
     static let scaleKey = "SubtitleScale"
 
+    /// Whether two subtitles show at once: the one selected, and a second one
+    /// in another language. Kept from file to file, as a way of watching.
+    static let dualKey = "DualSubtitlesEnabled"
+
+    /// The language of the last track chosen as the second subtitle, which a
+    /// later file's second subtitle is picked by. The same kind of hint as
+    /// `languageKey`, for the other half of the pair.
+    static let secondaryLanguageKey = "PreferredSecondarySubtitleLanguage"
+
     /// How far one press or one menu item moves the subtitle delay.
     static let delayStep: Double = 0.25
 
@@ -54,6 +63,21 @@ enum SubtitlePreference {
             // binding writes the same key and reads a missing value as empty.
             UserDefaults.standard.set(newValue ?? "", forKey: languageKey)
         }
+    }
+
+    static var isDualEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: dualKey) }
+        set { UserDefaults.standard.set(newValue, forKey: dualKey) }
+    }
+
+    static var secondaryLanguage: String? {
+        get {
+            let stored = UserDefaults.standard.string(forKey: secondaryLanguageKey)?
+                .trimmingCharacters(in: .whitespaces)
+            guard let stored, !stored.isEmpty else { return nil }
+            return stored
+        }
+        set { UserDefaults.standard.set(newValue ?? "", forKey: secondaryLanguageKey) }
     }
 
     static let scaleRange: ClosedRange<Double> = 0.5...3

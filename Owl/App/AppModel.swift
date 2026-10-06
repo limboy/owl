@@ -47,6 +47,11 @@ final class AppModel: ObservableObject {
     /// another file is asked for, so a choice never lands on the wrong video.
     private var pendingSubtitleSelection: SubtitleSelection?
 
+    /// Whether the second subtitle has been settled for the file playing,
+    /// by hand or from `SubtitlePreference.secondaryLanguage`. Either way it
+    /// is not picked again for this file, so a choice is never undone.
+    private var hasSettledSecondarySubtitle = false
+
     /// Held while a video is playing, to keep the display awake. Nil whenever
     /// nothing is playing, which is also how the state is read.
     private var playbackActivity: NSObjectProtocol?
@@ -309,6 +314,11 @@ final class AppModel: ObservableObject {
         // A choice made by hand outranks whatever was still waiting to be
         // restored, which would otherwise undo it a moment later.
         pendingSubtitleSelection = nil
+        // A track cannot be both subtitles at once, and turning subtitles off
+        // turns both off.
+        if track == nil || track?.isSecondary == true {
+            setSecondarySubtitle(nil)
+        }
         engine?.setSubtitle(id: track?.id)
 
         let selection = track.map(SubtitleSelection.of) ?? .off
@@ -322,6 +332,69 @@ final class AppModel: ObservableObject {
         playerState.announce(.subtitleTrack(
             track?.displayName(playing: playerState.currentURL) ?? "Off"
         ))
+    }
+
+    /// Turns Dual Subtitles on or off. Off takes the second subtitle away;
+    /// on leaves the one showing as ❶, for a second to be picked beside it.
+    func toggleDualSubtitles() {
+        SubtitlePreference.isDualEnabled.toggle()
+        if !SubtitlePreference.isDualEnabled {
+            setSecondarySubtitle(nil)
+        }
+        playerState.announce(.subtitleTrack(
+            SubtitlePreference.isDualEnabled ? "Dual Subtitles On" : "Dual Subtitles Off"
+        ))
+    }
+
+    /// A track clicked in Dual Subtitles, numbered by the order of the clicks.
+    /// See `DualSubtitlePair`.
+    func pickDualSubtitle(_ track: SubtitleTrack) {
+        let tracks = playerState.subtitles
+        let before = DualSubtitlePair(
+            first: playerState.selectedSubtitleID,
+            second: playerState.secondarySubtitle?.id
+        )
+        let after = before.clicking(track.id)
+        let first = tracks.first { $0.id == after.first }
+        let second = tracks.first { $0.id == after.second }
+
+        // The second goes first, so a ❷ moving up to ❶ is free to.
+        setSecondarySubtitle(nil)
+        if after.first != before.first {
+            selectSubtitle(first)
+        }
+        setSecondarySubtitle(second)
+        if let second, after.second != before.second,
+           let language = SubtitleSelection.of(second).language {
+            SubtitlePreference.secondaryLanguage = language
+        }
+        hasSettledSecondarySubtitle = true
+
+        let names = [first, second].compactMap {
+            $0?.displayName(playing: playerState.currentURL)
+        }
+        playerState.announce(.subtitleTrack(
+            names.isEmpty ? "Off" : names.joined(separator: " + ")
+        ))
+    }
+
+    private func setSecondarySubtitle(_ track: SubtitleTrack?) {
+        engine?.setSecondarySubtitle(id: track?.id)
+    }
+
+    /// Picks this file's second subtitle in the language last picked for one,
+    /// once its tracks are known. Only once per file, and never over a choice.
+    private func restoreSecondarySubtitle(in tracks: [SubtitleTrack]) {
+        guard SubtitlePreference.isDualEnabled,
+              !hasSettledSecondarySubtitle,
+              !tracks.contains(where: \.isSecondary),
+              let language = SubtitlePreference.secondaryLanguage,
+              let track = tracks.first(where: {
+                  !$0.isSelected && SubtitleSelection.of($0).language == language
+              })
+        else { return }
+        hasSettledSecondarySubtitle = true
+        setSecondarySubtitle(track)
     }
 
     /// Steps through the file's subtitle tracks and then off, for the key that
@@ -530,6 +603,7 @@ final class AppModel: ObservableObject {
     private func startPlayback(_ url: URL, startAt: Double?) {
         // Nothing remembered for the file being replaced may reach this one.
         pendingSubtitleSelection = nil
+        hasSettledSecondarySubtitle = false
         engine?.setSubtitleScale(SubtitlePreference.scale)
         engine?.load(
             url,
@@ -580,6 +654,7 @@ final class AppModel: ObservableObject {
         playerState.$subtitles
             .sink { [weak self] tracks in
                 self?.restoreSubtitleSelection(in: tracks)
+                self?.restoreSecondarySubtitle(in: tracks)
             }
             .store(in: &cancellables)
 

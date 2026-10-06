@@ -442,6 +442,45 @@ final class MPVPlayerEngineTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(500))
     }
 
+    /// mpv marks a second subtitle "selected" in its track list just as it
+    /// does the first, so which is which has to come through the shim apart.
+    func testTheFirstAndSecondSubtitlesAreToldApart() async throws {
+        let engine = try makeEngine()
+        let sample = try makeSample(audioOnly: true)
+        let first = try makeSubtitle()
+        let second = try makeSubtitle()
+        defer {
+            for url in [sample, first, second] {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+
+        engine.load(sample)
+        try await waitUntil { engine.state.currentTime > 0 }
+        engine.loadSubtitle(first)
+        engine.addSubtitle(second, selects: false)
+        try await waitUntil { engine.state.subtitles.count == 2 }
+        let firstID = try XCTUnwrap(engine.state.subtitles.first { $0.externalURL == first.standardizedFileURL }?.id)
+        let secondID = try XCTUnwrap(engine.state.subtitles.first { $0.externalURL == second.standardizedFileURL }?.id)
+
+        engine.setSecondarySubtitle(id: secondID)
+        try await waitUntil { engine.state.secondarySubtitle != nil }
+
+        XCTAssertEqual(engine.state.selectedSubtitleID, firstID)
+        XCTAssertEqual(engine.state.secondarySubtitle?.id, secondID)
+        XCTAssertEqual(engine.state.subtitles.filter(\.isSelected).count, 1)
+        XCTAssertNil(engine.state.errorMessage)
+
+        // The next file starts with no second subtitle of the last one's.
+        engine.load(sample)
+        try await waitUntil { engine.state.currentTime > 0 }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertNil(engine.state.secondarySubtitle)
+
+        engine.shutdown()
+        try await Task.sleep(for: .milliseconds(500))
+    }
+
     /// A subtitle named for another release of the same episode is one mpv
     /// passes over, and the player adds it — and, with nothing else showing,
     /// shows it.

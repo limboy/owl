@@ -201,6 +201,30 @@ final class SubtitleSelectionTests: XCTestCase {
         XCTAssertEqual(PlayerMenuAnchor.shortened("English"), "English")
     }
 
+    /// In Dual Subtitles the tracks are numbered in the order they are
+    /// clicked, and a click on a numbered one takes it away.
+    func testDualSubtitlesAreNumberedByTheOrderTheyAreClicked() {
+        let none = DualSubtitlePair(first: nil, second: nil)
+
+        let one = none.clicking(1)
+        XCTAssertEqual(one, DualSubtitlePair(first: 1, second: nil))
+        let two = one.clicking(2)
+        XCTAssertEqual(two, DualSubtitlePair(first: 1, second: 2))
+        // A third keeps the two most recent: ❷ moves up to ❶.
+        XCTAssertEqual(two.clicking(3), DualSubtitlePair(first: 2, second: 3))
+
+        // Taking ❶ away moves ❷ up; taking ❷ away leaves ❶.
+        XCTAssertEqual(two.clicking(1), DualSubtitlePair(first: 2, second: nil))
+        XCTAssertEqual(two.clicking(2), DualSubtitlePair(first: 1, second: nil))
+        XCTAssertEqual(one.clicking(1), none)
+
+        // A ❷ with no ❶, after turning the first off by other means, gets one.
+        XCTAssertEqual(
+            DualSubtitlePair(first: nil, second: 2).clicking(3),
+            DualSubtitlePair(first: 3, second: 2)
+        )
+    }
+
     func testALanguageCodeIsShownAsAWord() {
         XCTAssertEqual(SubtitleLanguage.displayName(for: "eng"), "English")
         XCTAssertEqual(SubtitleLanguage.displayName(for: "chi"), "Chinese")

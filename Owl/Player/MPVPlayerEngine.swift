@@ -369,6 +369,7 @@ final class MPVPlayerEngine: @unchecked Sendable {
                 codec: codec.isEmpty ? nil : codec,
                 isExternal: value.external,
                 isSelected: value.selected,
+                isSecondary: value.secondary,
                 externalURL: externalFilename.isEmpty
                     ? nil
                     : URL(fileURLWithPath: externalFilename).standardizedFileURL
@@ -469,6 +470,9 @@ final class MPVPlayerEngine: @unchecked Sendable {
         // and would otherwise carry the last one into every file after it.
         command(["set", "slang", preferredSubtitleLanguage ?? ""])
         command(["set", "sid", selectsSubtitles ? "auto" : "no"])
+        // A track id from the last file means nothing in this one. The second
+        // subtitle is picked again once this file's tracks are known.
+        command(["set", "secondary-sid", "no"])
         command(["loadfile", url.path, "replace"])
         setPaused(startsPaused)
         return generation
@@ -546,6 +550,12 @@ final class MPVPlayerEngine: @unchecked Sendable {
     /// already in the track list adds a second copy of it. Selecting the
     /// existing track is `setSubtitle(id:)`, and which of the two a request
     /// needs is `SubtitleSelection.action(restoring:in:)`.
+    /// Shows `id` as the second subtitle, or none. A track cannot be both:
+    /// the one being made second has to stop being the first beforehand.
+    func setSecondarySubtitle(id: Int64?) {
+        command(["set", "secondary-sid", id.map(String.init) ?? "no"])
+    }
+
     func loadSubtitle(_ url: URL) {
         addSubtitle(url, selects: true)
     }

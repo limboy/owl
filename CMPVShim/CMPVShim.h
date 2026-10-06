@@ -42,7 +42,10 @@ typedef struct MVPMPVEvent {
 
 typedef struct MVPMPVSubtitleTrack {
     int64_t id;
+    // The track shown as the subtitle. A track shown as the second subtitle
+    // is `secondary` instead: mpv marks both "selected" in its track list.
     bool selected;
+    bool secondary;
     bool external;
     char title[256];
     char language[64];

@@ -7,6 +7,8 @@ struct SubtitleTrack: Identifiable, Equatable, Sendable {
     let codec: String?
     let isExternal: Bool
     let isSelected: Bool
+    /// Whether this is the second subtitle, shown alongside the one selected.
+    let isSecondary: Bool
     /// The file an external track was loaded from, nil for an embedded one.
     /// mpv's own track ids are only meaningful while a file is open, so this
     /// is what a remembered sidecar choice is matched against on the next
@@ -20,6 +22,7 @@ struct SubtitleTrack: Identifiable, Equatable, Sendable {
         codec: String?,
         isExternal: Bool,
         isSelected: Bool,
+        isSecondary: Bool = false,
         externalURL: URL? = nil
     ) {
         self.id = id
@@ -28,6 +31,7 @@ struct SubtitleTrack: Identifiable, Equatable, Sendable {
         self.codec = codec
         self.isExternal = isExternal
         self.isSelected = isSelected
+        self.isSecondary = isSecondary
         self.externalURL = externalURL
     }
 
@@ -163,6 +167,11 @@ final class PlayerState: ObservableObject {
 
     var selectedSubtitle: SubtitleTrack? {
         subtitles.first(where: \.isSelected)
+    }
+
+    /// The second subtitle, shown with the first in Dual Subtitles.
+    var secondarySubtitle: SubtitleTrack? {
+        subtitles.first(where: \.isSecondary)
     }
 
     /// The chapter playback is in, if the file has any.
