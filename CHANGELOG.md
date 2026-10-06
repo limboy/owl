@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [1.6.0] - 2026-10-06
 - Play a video picked in the browser in a player window of its own, as the TV app does, sized to the video and leaving the browser free to look through; picking another video plays it in the same window, and closing the window stops it
 - Name the video in the player window's title bar, and open the folder's other videos from a list button at the right of the controls rather than from the video's name
 - Show the playback speed as a gauge whose needle leans with the speed, in place of the "1x" text in the controls
@@ -13,6 +15,7 @@
 - Title a matched episode's card with its series, number and title together, "Mad Men · S1E1 · Smoke Gets in Your Eyes"
 - Name a subtitle file in the subtitle menu by what follows the video's own name, such as "chs&eng", and shorten long names in the player's menus
 - Find subtitle files named for another release of the same episode or film, such as `Mad.Men.S01E01.….NOGRP.chs&eng.ass` beside `Mad Men.S01E01 - Smoke Gets in Your Eyes (… LION).mkv`, beside the video or in a Subs folder, and show one when nothing else is showing
+- Show the license and credits in About Owl: Owl is GPLv3, with links to the license, the source code, and the open-source projects it is built on
 
 ## [1.5.0] - 2026-10-05
 - Click the video's name in the player to see the folder's other videos and jump to one, with shuffle and repeat right there; they're no longer in the browser's … menu
