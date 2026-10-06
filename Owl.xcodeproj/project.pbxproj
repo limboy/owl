@@ -37,6 +37,7 @@
 		447DD6A51FF9DC1FBF3F08E7 /* LiveTextOverlayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81389D1AA16D30A01A289BD2 /* LiveTextOverlayTests.swift */; };
 		4659BF974AADCCE330D40EC6 /* FilePlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD55B69E99761BC490581E9 /* FilePlayerView.swift */; };
 		49D01BAECB87DDA60637AA94 /* OnlineMetadataServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A5D9C07D47E8C0B08085A26 /* OnlineMetadataServiceTests.swift */; };
+		4BB81FC1C137109A6EEA6ECA /* AboutPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF72168C7CF35B1DD0501377 /* AboutPanel.swift */; };
 		4F84531FC86B81E85DF399CF /* MPVPlayerEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCC8E952A90128DD529F1639 /* MPVPlayerEngineTests.swift */; };
 		51C5EAABF9C7A69145F1B27F /* FullScreenFrameAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7133BD7E8A48632D3C4BA88 /* FullScreenFrameAnimator.swift */; };
 		531A435A1C413F8BA257E874 /* CMPVShim.c in Sources */ = {isa = PBXBuildFile; fileRef = C98F2734DF3D47DAA96A618C /* CMPVShim.c */; };
@@ -219,6 +220,7 @@
 		BB978D7CD2A17FA5AD837F0F /* PlayerSubtitlePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerSubtitlePanel.swift; sourceTree = "<group>"; };
 		BDA1F1304BD67FEF2F43DB03 /* WindowTitleHidden.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowTitleHidden.swift; sourceTree = "<group>"; };
 		BDB00DF8F6F5E1F694F001F8 /* VideoTitleGuess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTitleGuess.swift; sourceTree = "<group>"; };
+		BF72168C7CF35B1DD0501377 /* AboutPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutPanel.swift; sourceTree = "<group>"; };
 		C01ADE4BFA5EA9A7DDB690A9 /* RecentFilesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentFilesTests.swift; sourceTree = "<group>"; };
 		C059B6893A6BB54B64E5426D /* BrowserLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserLocation.swift; sourceTree = "<group>"; };
 		C30A33BD5231EF485304BABC /* ExternalMediaProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalMediaProbe.swift; sourceTree = "<group>"; };
@@ -439,6 +441,7 @@
 		FBFBC427680D85D619D2CEA0 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				BF72168C7CF35B1DD0501377 /* AboutPanel.swift */,
 				42493D4355E2786D1631F7E6 /* ActivePlayer.swift */,
 				C6F2B59B9C0F68193F93C159 /* AppModel.swift */,
 				85C54626E6A0F02EAB11B481 /* FilePlayerWindows.swift */,
@@ -644,6 +647,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4BB81FC1C137109A6EEA6ECA /* AboutPanel.swift in Sources */,
 				EF9A1A3765574525227002CB /* ActivePlayer.swift in Sources */,
 				98E8F19BAC5C9AF9CA6DC9E3 /* AppModel.swift in Sources */,
 				A00EAABF52C096A9DBFC263F /* BrowserLocation.swift in Sources */,
@@ -938,7 +942,7 @@
 				INFOPLIST_FILE = Owl/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Owl;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Limboy";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -996,7 +1000,7 @@
 				INFOPLIST_FILE = Owl/Support/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Owl;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Limboy";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

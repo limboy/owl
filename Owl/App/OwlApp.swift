@@ -61,6 +61,7 @@ struct OwlApp: App {
         // handle, so this group is told to expect none of them.
         .handlesExternalEvents(matching: [])
         .commands {
+            AboutCommand()
             FileCommands()
             PlaybackCommands()
             SubtitleCommands()
@@ -70,6 +71,8 @@ struct OwlApp: App {
             }
             #endif
         }
+
+        AboutWindow()
     }
 }
 

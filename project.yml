@@ -124,7 +124,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Owl
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.video
-        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        INFOPLIST_KEY_NSHumanReadableCopyright: "Copyright © 2026 Limboy"
         CODE_SIGN_ENTITLEMENTS: Owl/Support/Owl.entitlements
         LD_RUNPATH_SEARCH_PATHS:
           - "$(inherited)"
