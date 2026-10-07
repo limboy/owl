@@ -6,6 +6,23 @@
     {
       "layers" : [
         {
+          "glass" : true,
+          "image-name" : "Golden-eyed owl in black space.png",
+          "name" : "Golden-eyed owl in black space",
+          "position-specializations" : [
+            {
+              "idiom" : "macOS",
+              "value" : {
+                "scale" : 0.82,
+                "translation-in-points" : [
+                  0,
+                  0
+                ]
+              }
+            }
+          ]
+        },
+        {
           "glass" : false,
           "image-name" : "icon.png",
           "name" : "icon",
