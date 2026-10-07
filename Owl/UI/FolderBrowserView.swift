@@ -18,6 +18,7 @@ struct FolderBrowserView: View {
     @FocusState private var isSidebarFocused: Bool
     @State private var headerOriginX: CGFloat = 0
     @State private var toolbarControlsWidth: CGFloat = Self.minimumToolbarControlsWidth
+    @State private var backButtonTrailing: CGFloat?
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
     @AppStorage(LibrarySortOrder.defaultsKey) private var sortOrder: LibrarySortOrder = .name
@@ -53,6 +54,23 @@ struct FolderBrowserView: View {
                 .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea(.container, edges: .top)
                 .toolbar {
+                    // In the toolbar rather than the header: the header runs
+                    // up under the title bar, where the toolbar takes every
+                    // click, so a button drawn there could be seen but never
+                    // pressed — and with it the only way out of a subfolder.
+                    if library.navigationPath.count > 1 {
+                        ToolbarItem(id: TrailingToolbarWidthReader.backID, placement: .navigation) {
+                            Button("Back", systemImage: "chevron.left") {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    library.goBack()
+                                }
+                            }
+                            .labelStyle(.iconOnly)
+                            .keyboardShortcut("[", modifiers: .command)
+                            .help("Back")
+                        }
+                    }
+
                     // Without the spacer the menu lands right beside the
                     // sidebar toggle, on top of the header's title.
                     ToolbarSpacer(.flexible)
@@ -232,27 +250,17 @@ struct FolderBrowserView: View {
     /// the whole animation and then jumped. Reading the pane's own leading edge
     /// gives an inset that closes as the sidebar opens, so the title travels
     /// with it.
+    ///
+    /// The Back button sits in that strip too, wherever the toolbar puts it,
+    /// so the title starts past it.
     private var headerLeadingInset: CGFloat {
-        max(24, Self.titleBarControlsWidth - headerOriginX)
+        let base = max(24, Self.titleBarControlsWidth - headerOriginX)
+        guard let backButtonTrailing else { return base }
+        return max(base, backButtonTrailing + 12)
     }
 
     private var contentHeader: some View {
         HStack(spacing: 10) {
-            if library.navigationPath.count > 1 {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        library.goBack()
-                    }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: 26, height: 26)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.borderless)
-                .help("Back")
-            }
-
             VStack(alignment: .leading, spacing: 1) {
                 Text(detailTitle)
                     .font(.headline)
@@ -272,6 +280,8 @@ struct FolderBrowserView: View {
         .background {
             TrailingToolbarWidthReader(minimum: Self.minimumToolbarControlsWidth) {
                 toolbarControlsWidth = $0
+            } onBackButtonChange: {
+                backButtonTrailing = $0
             }
         }
         .frame(height: 58)
@@ -895,9 +905,15 @@ private struct EntryContextMenu: ViewModifier {
 /// Measured from the toolbar's own views rather than assumed, because the
 /// search field's width is the toolbar's to decide and changes with the
 /// window's.
+///
+/// It also reports how far into the header the Back button reaches, or nil
+/// when there is none, for the title to start past it.
 struct TrailingToolbarWidthReader: NSViewRepresentable {
+    static let backID = "Owl.Back"
+
     let minimum: CGFloat
     let onChange: (CGFloat) -> Void
+    let onBackButtonChange: (CGFloat?) -> Void
 
     func makeNSView(context: Context) -> ReaderView {
         ReaderView()
@@ -906,6 +922,7 @@ struct TrailingToolbarWidthReader: NSViewRepresentable {
     func updateNSView(_ view: ReaderView, context: Context) {
         view.minimum = minimum
         view.onChange = onChange
+        view.onBackButtonChange = onBackButtonChange
         view.scheduleMeasurement()
     }
 
@@ -914,7 +931,9 @@ struct TrailingToolbarWidthReader: NSViewRepresentable {
 
         var minimum: CGFloat = 0
         var onChange: ((CGFloat) -> Void)?
+        var onBackButtonChange: ((CGFloat?) -> Void)?
         private var reported: CGFloat?
+        private var reportedBack: CGFloat??
         private var measurementScheduled = false
 
         override func viewDidMoveToWindow() {
@@ -962,13 +981,27 @@ struct TrailingToolbarWidthReader: NSViewRepresentable {
                 limit.isActive = true
             }
             let header = convert(bounds, to: nil)
-            // Only what sits over this header: the sidebar's own items, Add
-            // Folder and the sidebar toggle, are left of it.
+            let back = toolbar.items.first {
+                $0.itemIdentifier.rawValue == TrailingToolbarWidthReader.backID
+            }?.view.flatMap { view -> CGFloat? in
+                guard view.window === window, !view.isHiddenOrHasHiddenAncestor else { return nil }
+                let frame = view.convert(view.bounds, to: nil)
+                guard frame.width > 0, frame.maxX > header.minX else { return nil }
+                return (frame.maxX - header.minX).rounded()
+            }
+            if reportedBack != .some(back) {
+                reportedBack = .some(back)
+                onBackButtonChange?(back)
+            }
+            // Only what sits over this header's trailing half: Back, and with
+            // the sidebar collapsed Add Folder and the sidebar toggle, sit
+            // over its leading end, and counting them squeezed the title out.
             let leadingEdges = toolbar.items.compactMap { item -> CGFloat? in
-                guard let view = item.view, view.window === window, !view.isHiddenOrHasHiddenAncestor
+                guard item.itemIdentifier.rawValue != TrailingToolbarWidthReader.backID,
+                      let view = item.view, view.window === window, !view.isHiddenOrHasHiddenAncestor
                 else { return nil }
                 let frame = view.convert(view.bounds, to: nil)
-                guard frame.width > 0, frame.minX > header.minX, frame.minX < header.maxX
+                guard frame.width > 0, frame.minX > header.midX, frame.minX < header.maxX
                 else { return nil }
                 return frame.minX
             }
