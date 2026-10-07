@@ -243,6 +243,52 @@ final class AppModel: ObservableObject {
         playerState.announce(.position)
     }
 
+    /// Saves the frame on screen beside the system's own screenshots, at the
+    /// video's own size, with or without the subtitles as
+    /// `Screenshot.includesSubtitles` says, and says so once the file is
+    /// written.
+    ///
+    /// Drawn by the renderer rather than by mpv's own `screenshot` command,
+    /// which has to fall back on converting the decoded frame itself while
+    /// the renderer is in use, and cannot read a frame the hardware decoder
+    /// still holds — which is every frame here.
+    func takeScreenshot() {
+        guard let videoView, playerState.hasMedia, let video = playerState.currentURL else { return }
+        guard let width = playerState.videoDisplayWidth, let height = playerState.videoDisplayHeight,
+              width > 0, height > 0
+        else {
+            playerState.errorMessage = "There's no picture to take a screenshot of."
+            return
+        }
+        let includesSubtitles = Screenshot.includesSubtitles
+        let url = Screenshot.fileURL(
+            for: video,
+            at: playerState.currentTime,
+            in: Screenshot.folder()
+        )
+        Task { [weak self] in
+            let image = await videoView.screenshot(
+                width: Int(width.rounded()),
+                height: Int(height.rounded()),
+                includesSubtitles: includesSubtitles
+            )
+            let saved: Bool
+            if let image {
+                saved = await Task.detached(priority: .userInitiated) {
+                    Screenshot.writePNG(image, to: url)
+                }.value
+            } else {
+                saved = false
+            }
+            guard let self else { return }
+            if saved {
+                playerState.announce(.screenshot(includesSubtitles: includesSubtitles))
+            } else {
+                playerState.errorMessage = "Couldn't save the screenshot to \(url.deletingLastPathComponent().path)."
+            }
+        }
+    }
+
     /// Applied to `playerState` at once rather than on mpv's report of it, the
     /// way the subtitle delay is: a held key sends its next step before mpv has
     /// answered the last, and stepping from the old level would stall there.

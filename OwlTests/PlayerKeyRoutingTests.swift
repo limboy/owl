@@ -85,6 +85,17 @@ final class PlayerKeyRoutingTests: XCTestCase {
         XCTAssertFalse(PlayerKey.showPosition.repeats)
     }
 
+    /// S is mpv's screenshot key. One still per press: held, it would fill the
+    /// folder with copies of the same frame.
+    func testSTakesAScreenshot() {
+        XCTAssertEqual(PlayerKeyRouting.key(for: keyEvent("s")), .takeScreenshot)
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("S", modifiers: .shift)))
+        // ⌥S is the menu's Take Screenshot, and ⌘S nothing of the player's.
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("s", modifiers: .option)))
+        XCTAssertNil(PlayerKeyRouting.key(for: keyEvent("s", modifiers: .command)))
+        XCTAssertFalse(PlayerKey.takeScreenshot.repeats)
+    }
+
     /// Holding the delay keys down would run the subtitles minutes out of step
     /// inside a second, at a quarter of a second for every repeat the keyboard
     /// sends.

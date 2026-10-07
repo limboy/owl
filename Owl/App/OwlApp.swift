@@ -164,6 +164,7 @@ struct FileCommands: Commands {
 /// which is the same as choosing them with no video open ever did.
 struct PlaybackCommands: Commands {
     @ObservedObject private var activePlayer = ActivePlayer.shared
+    @AppStorage(Screenshot.includesSubtitlesKey) private var screenshotIncludesSubtitles = true
 
     var body: some Commands {
         CommandMenu("Playback") {
@@ -208,6 +209,17 @@ struct PlaybackCommands: Commands {
             Button("Reset Speed") {
                 target?.appModel.setSpeed(1)
             }
+
+            Divider()
+
+            // Option for the same reason as the Subtitles menu's keys: a bare
+            // S here would be taken from every text field. Over the picture
+            // the bare S works too.
+            Button("Take Screenshot") {
+                target?.appModel.takeScreenshot()
+            }
+            .keyboardShortcut("s", modifiers: .option)
+            Toggle("Include Subtitles in Screenshots", isOn: $screenshotIncludesSubtitles)
         }
     }
 

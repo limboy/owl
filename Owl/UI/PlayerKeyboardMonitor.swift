@@ -14,6 +14,7 @@ enum PlayerKey: Equatable {
     case showPosition
     case nextChapter
     case previousChapter
+    case takeScreenshot
 
     /// Whether holding the key down should keep repeating the action. Seeking
     /// and volume are worth repeating; toggling anything on the same repeats
@@ -26,7 +27,7 @@ enum PlayerKey: Equatable {
         case .seekBackward, .seekForward, .volumeUp, .volumeDown:
             true
         case .togglePlayPause, .increaseSubtitleDelay, .decreaseSubtitleDelay, .cycleSubtitle,
-             .showPosition, .nextChapter, .previousChapter:
+             .showPosition, .nextChapter, .previousChapter, .takeScreenshot:
             false
         }
     }
@@ -71,9 +72,10 @@ enum PlayerKeyRouting {
             break
         }
 
-        // The letters mpv itself uses — for subtitles, and O for the position,
-        // which IINA took up in 1.5 — so anybody arriving from either already
-        // knows them. Matched lowercased and against the shift key
+        // The letters mpv itself uses — for subtitles, O for the position,
+        // which IINA took up in 1.5, and S for a screenshot — so anybody
+        // arriving from either already knows them. Matched lowercased and
+        // against the shift key
         // rather than against "z" and "Z", or caps lock — which is not somebody
         // holding a modifier down — would swap the two.
         switch Character(scalar).lowercased() {
@@ -83,6 +85,8 @@ enum PlayerKeyRouting {
             return .cycleSubtitle
         case "o" where !isShifted:
             return .showPosition
+        case "s" where !isShifted:
+            return .takeScreenshot
         default:
             return nil
         }

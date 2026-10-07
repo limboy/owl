@@ -31,6 +31,9 @@ itself through [Sparkle](https://sparkle-project.org).
   named for another release.
 - **Live Text** — select, copy, and translate text in a paused frame,
   subtitles included.
+- **Screenshots** — save the frame at the video's full size to your screenshot
+  folder, with or without the subtitles (Playback ▸ Include Subtitles in
+  Screenshots).
 - Audio track selection, speed from 0.5× to 2×, chapters, Open Recent, Now
   Playing, and media keys.
 
@@ -45,6 +48,7 @@ itself through [Sparkle](https://sparkle-project.org).
 | `Z` / `⇧Z` | Subtitles 0.25s earlier / later |
 | `J` | Next subtitle track, then off |
 | `O` | Show the position |
+| `S` | Take a screenshot |
 | `⌃⌘F` | Toggle full screen |
 
 ## Build

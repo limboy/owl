@@ -19,7 +19,10 @@ typedef enum MVPMPVEventType {
     MVP_MPV_EVENT_SHUTDOWN = 4,
     MVP_MPV_EVENT_COMMAND_ERROR = 5,
     MVP_MPV_EVENT_TRACKS_CHANGED = 6,
-    MVP_MPV_EVENT_CHAPTERS_CHANGED = 7
+    MVP_MPV_EVENT_CHAPTERS_CHANGED = 7,
+    // A command finished without error. Failures are COMMAND_ERROR; both carry
+    // the request id the command was sent with in `reply_id`.
+    MVP_MPV_EVENT_COMMAND_REPLY = 8
 } MVPMPVEventType;
 
 typedef enum MVPMPVValueType {
@@ -35,6 +38,7 @@ typedef struct MVPMPVEvent {
     int error;
     int end_reason;
     int flag_value;
+    uint64_t reply_id;
     double double_value;
     char name[64];
     char string_value[512];
@@ -85,9 +89,11 @@ void mvp_mpv_set_wakeup_callback(
 );
 int mvp_mpv_poll_event(MVPMPVPlayer *player, MVPMPVEvent *event);
 
+// `request_id`, when given, receives the id the command's reply will carry.
 int mvp_mpv_command_async(
     MVPMPVPlayer *player,
     const char *const arguments[],
+    uint64_t *request_id,
     char *error_buffer,
     size_t error_buffer_size
 );

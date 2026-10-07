@@ -538,7 +538,12 @@ int mvp_mpv_poll_event(MVPMPVPlayer *player, MVPMPVEvent *output) {
         return 1;
     }
 
-    if (event->event_id == MPV_EVENT_COMMAND_REPLY && event->error < 0) {
+    if (event->event_id == MPV_EVENT_COMMAND_REPLY) {
+        output->reply_id = event->reply_userdata;
+        if (event->error >= 0) {
+            output->type = MVP_MPV_EVENT_COMMAND_REPLY;
+            return 1;
+        }
         output->type = MVP_MPV_EVENT_COMMAND_ERROR;
         output->error = event->error;
         copy_text(
@@ -588,6 +593,7 @@ int mvp_mpv_poll_event(MVPMPVPlayer *player, MVPMPVEvent *output) {
 int mvp_mpv_command_async(
     MVPMPVPlayer *player,
     const char *const arguments[],
+    uint64_t *request_id,
     char *error_buffer,
     size_t error_buffer_size
 ) {
@@ -595,7 +601,11 @@ int mvp_mpv_command_async(
         write_error(error_buffer, error_buffer_size, "The libmpv player is unavailable.");
         return -1;
     }
-    int status = player->command_async(player->handle, player->next_request_id++, arguments);
+    uint64_t id = player->next_request_id++;
+    if (request_id != NULL) {
+        *request_id = id;
+    }
+    int status = player->command_async(player->handle, id, arguments);
     if (status < 0) {
         write_mpv_error(player, error_buffer, error_buffer_size, "mpv command failed", status);
     }

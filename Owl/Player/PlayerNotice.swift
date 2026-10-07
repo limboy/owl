@@ -22,4 +22,6 @@ enum PlayerNotice: Equatable, Sendable {
     /// reads the live position for as long as it is up: a seek is reported
     /// before mpv has finished it, and the clock keeps moving afterwards.
     case position
+    /// A screenshot was saved, and whether the subtitles are in it.
+    case screenshot(includesSubtitles: Bool)
 }

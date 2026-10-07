@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Take a screenshot with S, or Playback ▸ Take Screenshot (⌥S): the frame is saved as a PNG at the video's own size to the folder macOS keeps screenshots in, the Desktop unless another is chosen, and named for the video and the moment in it; Include Subtitles in Screenshots, in the same menu, says whether the subtitles are drawn on it
 
 ## [1.6.1] - 2026-10-06
 - Fix library cards for widescreen videos, such as 2:1 series or scope films, spilling under the sidebar and past the window's edge

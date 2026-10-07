@@ -315,9 +315,16 @@ final class MPVPlayerEngine: @unchecked Sendable {
                 }
             }
 
+        case MVP_MPV_EVENT_COMMAND_REPLY:
+            replyHandlers.removeValue(forKey: event.reply_id)?(nil)
+
         case MVP_MPV_EVENT_COMMAND_ERROR:
             var mutableEvent = event
             let detail = swiftString(from: &mutableEvent.string_value)
+            if let reply = replyHandlers.removeValue(forKey: event.reply_id) {
+                reply(detail.isEmpty ? "The mpv command failed." : detail)
+                return
+            }
             Task { @MainActor [weak self] in
                 self?.state.isLoading = false
                 self?.state.errorMessage = detail.isEmpty ? "The mpv command failed." : detail
@@ -566,7 +573,34 @@ final class MPVPlayerEngine: @unchecked Sendable {
         command(["sub-add", url.path, selects ? "select" : "auto"])
     }
 
-    private func command(_ arguments: [String]) {
+    /// Shows or hides both subtitles, and calls `completion` once mpv has
+    /// taken the change — on mpv's event queue, which never waits on the
+    /// render thread, so a render thread may block until it is called.
+    ///
+    /// Only for drawing one picture without them: nothing else in the app
+    /// hides subtitles this way, which is why showing them again needs no
+    /// memory of how they were.
+    func setSubtitlesVisible(_ visible: Bool, completion: @escaping @Sendable () -> Void) {
+        let value = visible ? "yes" : "no"
+        let group = DispatchGroup()
+        for property in ["sub-visibility", "secondary-sub-visibility"] {
+            group.enter()
+            command(["set", property, value]) { _ in group.leave() }
+        }
+        group.notify(queue: eventQueue, execute: completion)
+    }
+
+    /// Callers waiting on a command's reply, by the request id it was sent
+    /// with. Event-queue state, like everything else the drain touches.
+    private var replyHandlers: [UInt64: @Sendable (String?) -> Void] = [:]
+
+    /// Sends `arguments` to mpv. `onReply`, when given, hears how the command
+    /// ended — nil for success, or the error — on the event queue, in place of
+    /// the error banner a failed command otherwise raises.
+    private func command(
+        _ arguments: [String],
+        onReply: (@Sendable (String?) -> Void)? = nil
+    ) {
         onEventQueue { [weak self] handle in
             let storage = arguments.map { strdup($0) }
             defer {
@@ -580,18 +614,28 @@ final class MPVPlayerEngine: @unchecked Sendable {
             }
             pointers.append(nil)
             var error = [CChar](repeating: 0, count: 512)
+            var requestID: UInt64 = 0
             let result = pointers.withUnsafeBufferPointer { argumentsPointer in
                 error.withUnsafeMutableBufferPointer { errorPointer in
                     mvp_mpv_command_async(
                         handle,
                         argumentsPointer.baseAddress,
+                        &requestID,
                         errorPointer.baseAddress,
                         errorPointer.count
                     )
                 }
             }
             if result < 0 {
-                self?.publishImmediateError(error)
+                if let onReply {
+                    onReply(error.withUnsafeBufferPointer { String(cString: $0.baseAddress!) })
+                } else {
+                    self?.publishImmediateError(error)
+                }
+            } else if let onReply {
+                // Registered on the event queue before the next drain can
+                // run, so the reply never arrives ahead of its handler.
+                self?.replyHandlers[requestID] = onReply
             }
         }
     }

@@ -260,6 +260,55 @@ private final class MVOpenGLRenderWorker: @unchecked Sendable {
         }
     }
 
+    /// The picture drawn at `width` × `height` pixels — the video's own size,
+    /// for a screenshot — with the subtitles on it, or without.
+    ///
+    /// Without them, mpv is told to hide them for this one draw and to show
+    /// them again before this returns. Both happen with the worker's queue
+    /// held, so the window never draws in between and never shows a picture
+    /// missing its subtitles. The waits are on mpv's event queue, which never
+    /// waits on this one; they are bounded all the same, so a player that has
+    /// stopped answering costs a screenshot rather than the picture.
+    func screenshot(
+        width: Int,
+        height: Int,
+        includesSubtitles: Bool,
+        completion: @escaping @Sendable (CGImage?) -> Void
+    ) {
+        queue.async { [self] in
+            guard width > 0, height > 0,
+                  let context = stateLock.withLock({ () -> NSOpenGLContext? in
+                      guard isActive, isVideoRenderingEnabled else { return nil }
+                      return self.context
+                  })
+            else {
+                completion(nil)
+                return
+            }
+
+            if !includesSubtitles {
+                setSubtitlesVisible(false)
+            }
+            context.lock()
+            context.makeCurrentContext()
+            let image = Self.readPicture(engine: engine, width: width, height: height)
+            NSOpenGLContext.clearCurrentContext()
+            context.unlock()
+            if !includesSubtitles {
+                setSubtitlesVisible(true)
+            }
+            requestRender(forceRedraw: true)
+            completion(image)
+        }
+    }
+
+    /// On the worker's queue, which it holds until mpv has the change.
+    private func setSubtitlesVisible(_ visible: Bool) {
+        let applied = DispatchSemaphore(value: 0)
+        engine.setSubtitlesVisible(visible) { applied.signal() }
+        _ = applied.wait(timeout: .now() + 1)
+    }
+
     /// With the context locked and current.
     private static func readPicture(engine: MPVPlayerEngine, width: Int, height: Int) -> CGImage? {
         var previousFramebuffer: GLint = 0
@@ -393,6 +442,20 @@ final class OwlVideoView: NSOpenGLView {
     func snapshot() async -> CGImage? {
         await withCheckedContinuation { continuation in
             renderWorker.snapshot { image in
+                continuation.resume(returning: image)
+            }
+        }
+    }
+
+    /// The picture at `width` × `height` pixels, with or without subtitles.
+    /// See `MVOpenGLRenderWorker.screenshot`.
+    func screenshot(width: Int, height: Int, includesSubtitles: Bool) async -> CGImage? {
+        await withCheckedContinuation { continuation in
+            renderWorker.screenshot(
+                width: width,
+                height: height,
+                includesSubtitles: includesSubtitles
+            ) { image in
                 continuation.resume(returning: image)
             }
         }

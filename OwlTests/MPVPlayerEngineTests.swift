@@ -535,6 +535,55 @@ final class MPVPlayerEngineTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(500))
     }
 
+    /// A screenshot is drawn at the video's own size rather than the view's,
+    /// and leaves the subtitles off only when asked — hiding them for the one
+    /// draw, through mpv, and showing them again afterwards.
+    func testAScreenshotIsTheVideosSizeWithOrWithoutTheSubtitles() async throws {
+        let subtitle = try makeSubtitle()
+        defer { try? FileManager.default.removeItem(at: subtitle) }
+
+        try await withVideoSurface(picture: "color=c=black:s=640x360:r=10") { engine, view, _ in
+            engine.setPaused(true)
+            engine.loadSubtitle(subtitle)
+            try await waitUntil { engine.state.isPaused && !engine.state.subtitles.isEmpty }
+            try await Task.sleep(for: .milliseconds(200))
+
+            let first = await view.screenshot(width: 640, height: 360, includesSubtitles: true)
+            let bare = await view.screenshot(width: 640, height: 360, includesSubtitles: false)
+            let last = await view.screenshot(width: 640, height: 360, includesSubtitles: true)
+            let withSubtitles = try XCTUnwrap(first)
+            let withoutSubtitles = try XCTUnwrap(bare)
+            let again = try XCTUnwrap(last)
+
+            XCTAssertEqual(withSubtitles.width, 640)
+            XCTAssertEqual(withSubtitles.height, 360)
+            XCTAssertGreaterThan(brightPixels(in: withSubtitles), 10, "the subtitle should be drawn")
+            XCTAssertEqual(brightPixels(in: withoutSubtitles), 0, "the subtitle should be left off")
+            XCTAssertGreaterThan(brightPixels(in: again), 10, "the subtitle should be back")
+            XCTAssertNil(engine.state.errorMessage)
+
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("OwlEngineShot-\(UUID().uuidString).png")
+            defer { try? FileManager.default.removeItem(at: url) }
+            XCTAssertTrue(Screenshot.writePNG(withSubtitles, to: url))
+            XCTAssertEqual(try Data(contentsOf: url).prefix(4), Data([0x89, 0x50, 0x4E, 0x47]))
+        }
+    }
+
+    /// How many pixels of a picture of black are anything but dark.
+    private func brightPixels(in image: CGImage) -> Int {
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        var count = 0
+        for y in stride(from: 0, to: image.height, by: 2) {
+            for x in stride(from: 0, to: image.width, by: 2) {
+                if let color = bitmap.colorAt(x: x, y: y), color.brightnessComponent > 0.5 {
+                    count += 1
+                }
+            }
+        }
+        return count
+    }
+
     private func makeSubtitle() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("OwlEngineSample-\(UUID().uuidString).srt")

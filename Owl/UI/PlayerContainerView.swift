@@ -263,6 +263,8 @@ struct PlayerContainerView: View {
             appModel.playNextChapter()
         case .previousChapter:
             appModel.playPreviousChapter()
+        case .takeScreenshot:
+            appModel.takeScreenshot()
         }
     }
 
@@ -371,6 +373,8 @@ struct PlayerContainerView: View {
             return "list.bullet.rectangle"
         case .position:
             return state.isPaused ? "pause.fill" : "play.fill"
+        case .screenshot:
+            return "camera.viewfinder"
         }
     }
 
@@ -394,6 +398,8 @@ struct PlayerContainerView: View {
         case .position:
             guard state.duration > 0 else { return playerTimeString(state.currentTime) }
             return "\(playerTimeString(state.currentTime)) / \(playerTimeString(state.duration))"
+        case .screenshot(let includesSubtitles):
+            return includesSubtitles ? "Screenshot Saved" : "Screenshot Saved Without Subtitles"
         }
     }
 
