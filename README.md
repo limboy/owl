@@ -16,7 +16,8 @@ itself through [Sparkle](https://sparkle-project.org).
 ## Features
 
 - **Folder library** — add folders and browse them as a grid of thumbnails;
-  they are watched for changes.
+  they are watched for changes. Search a folder by file name or matched title
+  (`⌘F`), and sort it by name, date added, or recently watched.
 - **Metadata sync** — optionally match videos against
   [The Movie Database](https://www.themoviedb.org) for titles, descriptions,
   and artwork. Off by default.

@@ -16,6 +16,9 @@ struct BrowserEntry: Identifiable, Hashable, Sendable {
 
     let url: URL
     let kind: Kind
+    /// When it arrived in its folder — Finder's Date Added — or, on a volume
+    /// that does not keep that, when it was made.
+    var dateAdded: Date? = nil
 
     var id: URL { url }
     var name: String { url.lastPathComponent }
@@ -271,7 +274,9 @@ final class FolderLibrary: ObservableObject {
                     .isDirectoryKey,
                     .isRegularFileKey,
                     .isHiddenKey,
-                    .contentTypeKey
+                    .contentTypeKey,
+                    .addedToDirectoryDateKey,
+                    .creationDateKey
                 ],
                 options: [.skipsHiddenFiles]
             )
@@ -377,15 +382,18 @@ final class FolderLibrary: ObservableObject {
     }
 
     private static func makeEntry(_ url: URL) -> BrowserEntry? {
-        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isHiddenKey])
+        let values = try? url.resourceValues(forKeys: [
+            .isDirectoryKey, .isHiddenKey, .addedToDirectoryDateKey, .creationDateKey
+        ])
         if values?.isHidden == true {
             return nil
         }
+        let dateAdded = values?.addedToDirectoryDate ?? values?.creationDate
         if values?.isDirectory == true {
-            return BrowserEntry(url: url.standardizedFileURL, kind: .folder)
+            return BrowserEntry(url: url.standardizedFileURL, kind: .folder, dateAdded: dateAdded)
         }
         if isVideo(url) {
-            return BrowserEntry(url: url.standardizedFileURL, kind: .video)
+            return BrowserEntry(url: url.standardizedFileURL, kind: .video, dateAdded: dateAdded)
         }
         return nil
     }

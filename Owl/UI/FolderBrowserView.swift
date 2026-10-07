@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+extension FocusedValues {
+    /// Puts the cursor in the library's search field, for Edit ▸ Find.
+    @Entry var focusLibrarySearch: (() -> Void)?
+}
+
 struct FolderBrowserView: View {
     @ObservedObject var appModel: AppModel
     @ObservedObject private var library: FolderLibrary
@@ -12,6 +17,10 @@ struct FolderBrowserView: View {
     @State private var pendingRootSelectionID: UUID?
     @FocusState private var isSidebarFocused: Bool
     @State private var headerOriginX: CGFloat = 0
+    @State private var toolbarControlsWidth: CGFloat = Self.minimumToolbarControlsWidth
+    @State private var searchText = ""
+    @FocusState private var isSearchFocused: Bool
+    @AppStorage(LibrarySortOrder.defaultsKey) private var sortOrder: LibrarySortOrder = .name
 
     private let gridColumns = [
         GridItem(.adaptive(minimum: 260, maximum: 390), spacing: 18, alignment: .top)
@@ -49,9 +58,16 @@ struct FolderBrowserView: View {
                     ToolbarSpacer(.flexible)
 
                     ToolbarItem(placement: .primaryAction) {
+                        sortMenu
+                    }
+
+                    ToolbarItem(placement: .primaryAction) {
                         optionsMenu
                     }
                 }
+                .searchable(text: $searchText, placement: .toolbar, prompt: "Search")
+                .searchFocused($isSearchFocused)
+                .focusedSceneValue(\.focusLibrarySearch) { isSearchFocused = true }
         }
         .navigationSplitViewStyle(.balanced)
         .coordinateSpace(.named(Self.splitSpace))
@@ -77,7 +93,12 @@ struct FolderBrowserView: View {
         }
         .onAppear(perform: synchronizeSelection)
         .onChange(of: destination) { _, _ in rememberLocation() }
-        .onChange(of: library.navigationPath) { _, _ in rememberLocation() }
+        .onChange(of: library.navigationPath) { _, _ in
+            rememberLocation()
+            // A search is of the folder it was typed in; carried into the
+            // next, it would hide most of what was just opened.
+            searchText = ""
+        }
         .onChange(of: library.roots) { _, _ in
             synchronizeSelection()
         }
@@ -135,7 +156,25 @@ struct FolderBrowserView: View {
 
     private var itemCountText: String {
         let count = library.entries.count
-        return "\(count) \(count == 1 ? "item" : "items")"
+        let total = "\(count) \(count == 1 ? "item" : "items")"
+        guard isSearching else { return total }
+        return "\(arrangedEntries.count) of \(total)"
+    }
+
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    /// The folder as the grid shows it: narrowed to the search, in the order
+    /// chosen from the sort menu.
+    private var arrangedEntries: [BrowserEntry] {
+        LibraryArrangement.arrange(
+            library.entries,
+            matching: searchText,
+            by: sortOrder,
+            title: title(for:),
+            lastWatched: appModel.lastWatched
+        )
     }
 
     private var selectedRoot: LibraryRoot? {
@@ -159,6 +198,8 @@ struct FolderBrowserView: View {
                     chooseFolderState
                 } else if library.entries.isEmpty {
                     emptyFolderState
+                } else if isSearching, arrangedEntries.isEmpty {
+                    ContentUnavailableView.search(text: searchText)
                 } else {
                     grid
                 }
@@ -171,10 +212,12 @@ struct FolderBrowserView: View {
     /// the sidebar is collapsed.
     private static let titleBarControlsWidth: CGFloat = 196
 
-    /// How much of the trailing title bar strip the options menu takes up.
-    /// The header runs up under the title bar, so the title has to stop short
-    /// of it rather than truncate beneath it.
-    private static let toolbarControlsWidth: CGFloat = 76
+    /// The least the title stops short of the window's trailing edge, before
+    /// the toolbar has been measured. The header runs up under the title bar,
+    /// so the title has to stop short of the sort and options menus and the
+    /// search field rather than run beneath them; `TrailingToolbarWidthReader`
+    /// measures how far in they reach.
+    private static let minimumToolbarControlsWidth: CGFloat = 76
 
     private static let splitSpace = "BrowserSplit"
 
@@ -225,11 +268,31 @@ struct FolderBrowserView: View {
             Spacer(minLength: 16)
         }
         .padding(.leading, headerLeadingInset)
-        .padding(.trailing, Self.toolbarControlsWidth)
+        .padding(.trailing, toolbarControlsWidth)
+        .background {
+            TrailingToolbarWidthReader(minimum: Self.minimumToolbarControlsWidth) {
+                toolbarControlsWidth = $0
+            }
+        }
         .frame(height: 58)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.frame(in: .named(Self.splitSpace)).minX
         } action: { headerOriginX = $0 }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort By", selection: $sortOrder) {
+                ForEach(LibrarySortOrder.allCases) { order in
+                    Text(order.label).tag(order)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+        .help("Sort By")
+        .accessibilityLabel("Sort By")
     }
 
     private var optionsMenu: some View {
@@ -296,7 +359,7 @@ struct FolderBrowserView: View {
     private var grid: some View {
         ScrollView {
             LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 22) {
-                ForEach(library.entries) { entry in
+                ForEach(arrangedEntries) { entry in
                     entryGridItem(entry)
                 }
             }
@@ -819,6 +882,102 @@ private struct EntryContextMenu: ViewModifier {
                 Divider()
                 Button("Move to Trash", role: .destructive) { moveToTrash(entry) }
             }
+        }
+    }
+}
+
+/// How far in from the window's trailing edge the toolbar's trailing items
+/// reach — the sort and options menus and the search field — for a header
+/// drawn under the title bar to stop short of.
+///
+/// The toolbar knows nothing of that header, so it never shrinks the search
+/// field to make room for the title; at a narrow width the two would overlap.
+/// Measured from the toolbar's own views rather than assumed, because the
+/// search field's width is the toolbar's to decide and changes with the
+/// window's.
+struct TrailingToolbarWidthReader: NSViewRepresentable {
+    let minimum: CGFloat
+    let onChange: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ReaderView {
+        ReaderView()
+    }
+
+    func updateNSView(_ view: ReaderView, context: Context) {
+        view.minimum = minimum
+        view.onChange = onChange
+        view.scheduleMeasurement()
+    }
+
+    final class ReaderView: NSView {
+        static let searchFieldWidth: CGFloat = 220
+
+        var minimum: CGFloat = 0
+        var onChange: ((CGFloat) -> Void)?
+        private var reported: CGFloat?
+        private var measurementScheduled = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            NotificationCenter.default.removeObserver(self)
+            guard let window else { return }
+            for name in [NSWindow.didResizeNotification, NSWindow.didUpdateNotification] {
+                NotificationCenter.default.addObserver(
+                    self, selector: #selector(windowChanged), name: name, object: window
+                )
+            }
+            scheduleMeasurement()
+        }
+
+        @objc private func windowChanged() {
+            scheduleMeasurement()
+        }
+
+        /// After the toolbar has laid itself out for whatever just changed.
+        func scheduleMeasurement() {
+            guard !measurementScheduled else { return }
+            measurementScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                measurementScheduled = false
+                measure()
+            }
+        }
+
+        private func measure() {
+            guard let window, let toolbar = window.toolbar else { return }
+            // Left to itself the search field takes all the room the toolbar
+            // has, which at a narrow width is all of the header's: the
+            // folder's name would be squeezed out to make a field for a few
+            // words wider than it needs. Finder's is about this wide. The
+            // preferred width alone does not hold it — the toolbar stretches
+            // the field past it — so the field is held to it too; the width
+            // having been set marks an item already seen to.
+            for case let item as NSSearchToolbarItem in toolbar.items
+            where item.preferredWidthForSearchField != Self.searchFieldWidth {
+                item.preferredWidthForSearchField = Self.searchFieldWidth
+                let limit = item.searchField.widthAnchor.constraint(
+                    lessThanOrEqualToConstant: Self.searchFieldWidth
+                )
+                limit.isActive = true
+            }
+            let header = convert(bounds, to: nil)
+            // Only what sits over this header: the sidebar's own items, Add
+            // Folder and the sidebar toggle, are left of it.
+            let leadingEdges = toolbar.items.compactMap { item -> CGFloat? in
+                guard let view = item.view, view.window === window, !view.isHiddenOrHasHiddenAncestor
+                else { return nil }
+                let frame = view.convert(view.bounds, to: nil)
+                guard frame.width > 0, frame.minX > header.minX, frame.minX < header.maxX
+                else { return nil }
+                return frame.minX
+            }
+            guard let leading = leadingEdges.min() else { return }
+            // A gap between the title's last letter and the first control.
+            let width = max(minimum, (header.maxX - leading + 12).rounded())
+            guard width != reported else { return }
+            reported = width
+            onChange?(width)
         }
     }
 }

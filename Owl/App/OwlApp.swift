@@ -65,6 +65,7 @@ struct OwlApp: App {
             FileCommands()
             PlaybackCommands()
             SubtitleCommands()
+            FindCommands()
             #if canImport(Sparkle)
             CommandGroup(after: .appInfo) {
                 CheckForUpdatesView(updater: updaterController.updater)
@@ -225,6 +226,22 @@ struct PlaybackCommands: Commands {
 
     private var target: PlayerTarget? {
         activePlayer.target
+    }
+}
+
+/// Edit ▸ Find, which goes to the library's search field. Does nothing over a
+/// player, which has nothing to search; it is not disabled there for the
+/// reason given on `PlaybackCommands`.
+struct FindCommands: Commands {
+    @FocusedValue(\.focusLibrarySearch) private var focusLibrarySearch
+
+    var body: some Commands {
+        CommandGroup(after: .textEditing) {
+            Button("Find") {
+                focusLibrarySearch?()
+            }
+            .keyboardShortcut("f")
+        }
     }
 }
 

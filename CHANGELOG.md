@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+- Search the folder being browsed from the field in the toolbar, or with ⌘F: every word typed has to match the file's name or its title from The Movie Database, ignoring case and accents
+- Sort the browser by Name, Date Added or Recently Watched from the sort button in the toolbar; folders stay ahead of videos, and a folder counts as watched when anything inside it was
 - Take a screenshot with S, or Playback ▸ Take Screenshot (⌥S): the frame is saved as a PNG at the video's own size to the folder macOS keeps screenshots in, the Desktop unless another is chosen, and named for the video and the moment in it; Include Subtitles in Screenshots, in the same menu, says whether the subtitles are drawn on it
 
 ## [1.6.1] - 2026-10-06

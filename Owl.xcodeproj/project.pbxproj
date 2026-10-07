@@ -29,6 +29,7 @@
 		3042AB12579F72C816A04A10 /* WindowTitleHidden.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA1F1304BD67FEF2F43DB03 /* WindowTitleHidden.swift */; };
 		3087D0228911A1CA336730B4 /* MPVPlayerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C69E2716A6927AAE5AB0FC30 /* MPVPlayerEngine.swift */; };
 		369A8D93151737379E35C2AD /* Screenshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82B246D4A68901EA6A69CF4E /* Screenshot.swift */; };
+		372EE7CC02C98E70B81FB8DD /* LibraryArrangementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C60AD4EF90D54C6F3B12ACE /* LibraryArrangementTests.swift */; };
 		3794109AEE0FD8A669674436 /* PlaybackSleepPreventionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 093418A852F12FF5F2C2A376 /* PlaybackSleepPreventionTests.swift */; };
 		3813DF4D2DC9B9A0E243BB1B /* VideoSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC6D17A8C1723ECB080630E1 /* VideoSurface.swift */; };
 		3E7CC481F620CF5E8B1B43CA /* SubtitleDiscoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F7D96E8E86528A4C737240 /* SubtitleDiscoveryTests.swift */; };
@@ -102,6 +103,7 @@
 		EF9A1A3765574525227002CB /* ActivePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42493D4355E2786D1631F7E6 /* ActivePlayer.swift */; };
 		F22EA25DED1F3AB48B2D05F5 /* PlayerNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AED723DD95B11BE3B6BBA25 /* PlayerNotice.swift */; };
 		F41673A067E6E9693504559E /* PlayerKeyboardMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E9A82848C0D9F83D3630766 /* PlayerKeyboardMonitor.swift */; };
+		F991FDDA23C40BB01633FCC3 /* LibraryArrangement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F080A9F7F5CA622D0251676 /* LibraryArrangement.swift */; };
 		FCA100535EB69CB1750595DA /* ExternalThumbnailRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4970997FBFC0773D78E00155 /* ExternalThumbnailRenderer.swift */; };
 /* End PBXBuildFile section */
 
@@ -187,6 +189,7 @@
 		5432C3419818B5FEE77FC848 /* FolderLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderLibraryTests.swift; sourceTree = "<group>"; };
 		59D27F50052E25A26733B25D /* Owl.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Owl.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5AF92AB949157F871F84B6FB /* FolderWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderWatcher.swift; sourceTree = "<group>"; };
+		5C60AD4EF90D54C6F3B12ACE /* LibraryArrangementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryArrangementTests.swift; sourceTree = "<group>"; };
 		5ED909571D9C52E345E1ACC8 /* OnlineMetadataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnlineMetadataService.swift; sourceTree = "<group>"; };
 		5F195FD1A2AEB0CAFAD57571 /* SubtitleStateStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleStateStoreTests.swift; sourceTree = "<group>"; };
 		656B2E6C7CDC5DD236F04AE3 /* LibMPVLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibMPVLoader.swift; sourceTree = "<group>"; };
@@ -194,6 +197,7 @@
 		6B823CA05336226BDE2E3C15 /* TMDBClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TMDBClient.swift; sourceTree = "<group>"; };
 		74C76B9868D82BEC6FE6B098 /* PlaybackQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackQueue.swift; sourceTree = "<group>"; };
 		7E9A82848C0D9F83D3630766 /* PlayerKeyboardMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerKeyboardMonitor.swift; sourceTree = "<group>"; };
+		7F080A9F7F5CA622D0251676 /* LibraryArrangement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryArrangement.swift; sourceTree = "<group>"; };
 		81389D1AA16D30A01A289BD2 /* LiveTextOverlayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTextOverlayTests.swift; sourceTree = "<group>"; };
 		81840AEB2C8BA1EEE343254F /* PlayerContainerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerContainerView.swift; sourceTree = "<group>"; };
 		82B246D4A68901EA6A69CF4E /* Screenshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot.swift; sourceTree = "<group>"; };
@@ -305,6 +309,7 @@
 				4970997FBFC0773D78E00155 /* ExternalThumbnailRenderer.swift */,
 				03546ED494F7981257B22719 /* FolderLibrary.swift */,
 				5AF92AB949157F871F84B6FB /* FolderWatcher.swift */,
+				7F080A9F7F5CA622D0251676 /* LibraryArrangement.swift */,
 				4621E1B4E6785A0FE5112F63 /* MediaMetadata.swift */,
 				CE47C887D3498C5E61DFE7DC /* MediaThumbnailProvider.swift */,
 				9F7898135892A57BD233B87E /* OnlineArtwork.swift */,
@@ -344,6 +349,7 @@
 				ED791579A595AB920BF3B4C3 /* ExternalThumbnailRendererTests.swift */,
 				5432C3419818B5FEE77FC848 /* FolderLibraryTests.swift */,
 				86F95DCB088AE9C1F23648D9 /* LibMPVLoaderTests.swift */,
+				5C60AD4EF90D54C6F3B12ACE /* LibraryArrangementTests.swift */,
 				81389D1AA16D30A01A289BD2 /* LiveTextOverlayTests.swift */,
 				B8C1E88E7092374764AEB3C8 /* MediaThumbnailProviderTests.swift */,
 				8C9A0A5A5D5250649E7A1DA9 /* MPVCallbackContextTests.swift */,
@@ -623,6 +629,7 @@
 				0003AF8949ED1256C3A43291 /* ExternalThumbnailRendererTests.swift in Sources */,
 				A5E72DC6FE56818127A1499A /* FolderLibraryTests.swift in Sources */,
 				19F93DAA44C3F00C9A4D04F7 /* LibMPVLoaderTests.swift in Sources */,
+				372EE7CC02C98E70B81FB8DD /* LibraryArrangementTests.swift in Sources */,
 				447DD6A51FF9DC1FBF3F08E7 /* LiveTextOverlayTests.swift in Sources */,
 				56706FE9718A5A319CF6C302 /* MPVCallbackContextTests.swift in Sources */,
 				4F84531FC86B81E85DF399CF /* MPVPlayerEngineTests.swift in Sources */,
@@ -673,6 +680,7 @@
 				51C5EAABF9C7A69145F1B27F /* FullScreenFrameAnimator.swift in Sources */,
 				D74494569D6D047D8CDADA1E /* LibMPVLoader.swift in Sources */,
 				C0AA28E4D823547433204413 /* LibMPVSetupView.swift in Sources */,
+				F991FDDA23C40BB01633FCC3 /* LibraryArrangement.swift in Sources */,
 				58E7B7176DD043912911B518 /* LibraryPlayerWindow.swift in Sources */,
 				D10613567995EEA1BB4E0763 /* LiveTextOverlay.swift in Sources */,
 				A2BB7DDC0B32DE13076BD9ED /* MPVCallbackContext.swift in Sources */,

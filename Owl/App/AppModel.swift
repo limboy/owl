@@ -583,6 +583,22 @@ final class AppModel: ObservableObject {
         progressStore.progress(for: url)
     }
 
+    /// When anything in `entry` was last played: the video itself, or for a
+    /// folder, the most recent of everything under it — so a series moves up
+    /// the moment one of its episodes is watched.
+    func lastWatched(_ entry: BrowserEntry) -> Date? {
+        switch entry.kind {
+        case .video:
+            return progressStore.progress(for: entry.url)?.lastPlayed
+        case .folder:
+            let prefix = entry.url.standardizedFileURL.path + "/"
+            // Newest first, so the first one inside is the answer.
+            return progressStore.entries
+                .first { $0.url.standardizedFileURL.path.hasPrefix(prefix) }?
+                .lastPlayed
+        }
+    }
+
     func toggleWatched(for url: URL, duration: Double?) {
         let isWatched = progressStore.progress(for: url)?.isCompleted == true
         progressStore.setWatched(!isWatched, url: url, duration: duration)
