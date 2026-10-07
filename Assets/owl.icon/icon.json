@@ -6,7 +6,7 @@
     {
       "layers" : [
         {
-          "glass" : true,
+          "glass" : false,
           "image-name" : "Golden-eyed owl in black space.png",
           "name" : "Golden-eyed owl in black space",
           "position-specializations" : [
