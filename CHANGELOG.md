@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-07
+- Fix the Back button in a subfolder doing nothing when clicked, which left no way back out; ⌘[ now goes back too
+- Fix the folder's name disappearing from the top of the browser while the sidebar is hidden
+
 ## [1.7.0] - 2026-10-07
 - A new app icon: a golden-eyed owl
 - Search the folder being browsed from the field in the toolbar, or with ⌘F: every word typed has to match the file's name or its title from The Movie Database, ignoring case and accents
