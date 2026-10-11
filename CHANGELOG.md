@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-11
+- Preview videos in Finder with the Space bar, MKV and WebM included: a QuickTime-style player sized to the video, with play/pause, seeking and volume in a bar that fades away while it plays; click the picture to play or pause
+- Show a frame from the video as its icon in Finder, for every format Owl plays
+
 ## [1.7.1] - 2026-10-07
 - Fix the Back button in a subfolder doing nothing when clicked, which left no way back out; ⌘[ now goes back too
 - Fix the folder's name disappearing from the top of the browser while the sidebar is hidden
