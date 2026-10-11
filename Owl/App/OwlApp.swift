@@ -81,6 +81,13 @@ struct OwlApp: App {
 /// Dock, or Open With.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Every video gets a window of its own, never a tab in another one. Turning
+    /// tabbing off before any window exists also takes Show Tab Bar and Show
+    /// All Tabs out of the View menu.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSWindow.allowsAutomaticWindowTabbing = false
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls where FolderLibrary.isVideo(url) {
             FilePlayerWindows.shared.open(url)

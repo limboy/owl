@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 - Sync Metadata is now on by default, so a new library shows titles and artwork from The Movie Database straight away; this sends video file names to TMDB, and it can be switched off from the Options menu; anyone who already set it keeps their choice
+- Remove window tabs: every video opens in a window of its own, and Show Tab Bar and Show All Tabs are gone from the View menu
 - Move the drag-a-folder hint under the Add Folder button on the empty library screen
 
 ## [1.8.0] - 2026-10-11
