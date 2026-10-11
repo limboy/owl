@@ -9,6 +9,11 @@ struct TimelinePreviewScrubber: View {
     let chapters: [Chapter]
     @Binding var isSeeking: Bool
     @Binding var seekValue: Double
+    /// The knob was taken hold of.
+    let onScrubStart: () -> Void
+    /// The knob moved while held, to this time.
+    let onScrub: (Double) -> Void
+    /// The knob was let go, at this time.
     let onCommit: (Double) -> Void
 
     @State private var previewTime: Double?
@@ -18,6 +23,10 @@ struct TimelinePreviewScrubber: View {
     @State private var thumbnailTask: Task<Void, Never>?
     @State private var committedSeekTarget: Double?
     @State private var seekCompletionTask: Task<Void, Never>?
+    /// Held from the first move of a drag to its end. `isSeeking` outlasts it
+    /// until the player reaches the time it was let go at, so it cannot say
+    /// whether a new drag has begun.
+    @State private var isDragging = false
 
     private let thumbnailProvider = MediaThumbnailProvider.shared
 
@@ -94,10 +103,15 @@ struct TimelinePreviewScrubber: View {
                                     seekCompletionTask?.cancel()
                                     committedSeekTarget = nil
                                 }
-                                updatePreview(at: value.location.x, width: width)
+                                let time = updatePreview(at: value.location.x, width: width)
                                 if !isSeeking {
                                     isSeeking = true
                                 }
+                                if !isDragging {
+                                    isDragging = true
+                                    onScrubStart()
+                                }
+                                if let time { onScrub(time) }
                             }
                             .onEnded { value in
                                 let destination = updatePreview(
@@ -105,6 +119,7 @@ struct TimelinePreviewScrubber: View {
                                     width: width
                                 ) ?? seekValue
                                 committedSeekTarget = destination
+                                isDragging = false
                                 onCommit(destination)
                                 scheduleSeekCompletionFallback()
                                 clearPreview()

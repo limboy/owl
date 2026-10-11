@@ -522,6 +522,9 @@ private struct PlayerControlsView: View {
 
     /// The panel button the pointer is over, whose click is its own toggle.
     @State private var hoveredPanelButton: PlayerPanel?
+    /// Whether the video was paused when the knob was taken hold of, to go
+    /// back to once it is let go.
+    @State private var wasPausedBeforeScrubbing: Bool?
 
     var body: some View {
         VStack(spacing: 6) {
@@ -667,9 +670,21 @@ private struct PlayerControlsView: View {
             url: state.currentURL,
             chapters: state.chapters,
             isSeeking: $isSeeking,
-            seekValue: $seekValue
+            seekValue: $seekValue,
+            // Playback pauses while the knob is held, so the picture follows
+            // it frame by frame, and picks up again where it was let go if it
+            // was playing before.
+            onScrubStart: {
+                wasPausedBeforeScrubbing = state.isPaused
+                engine.setPaused(true)
+            },
+            onScrub: { engine.seek(to: $0) }
         ) { value in
             engine.seek(to: value)
+            if let wasPaused = wasPausedBeforeScrubbing {
+                wasPausedBeforeScrubbing = nil
+                engine.setPaused(wasPaused)
+            }
         }
     }
 

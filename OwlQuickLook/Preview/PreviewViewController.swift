@@ -27,6 +27,9 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
     private let message = NSTextField(wrappingLabelWithString: "")
 
     private var isScrubbing = false
+    /// Whether the video was paused when the knob was taken hold of, to go
+    /// back to once it is let go.
+    private var wasPausedBeforeScrubbing: Bool?
     private var isPointerOverBar = false
     private var hideControls: DispatchWorkItem?
     private var appliedAspectRatio: Double?
@@ -203,6 +206,8 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         engine = nil
         surface.image = nil
         appliedAspectRatio = nil
+        isScrubbing = false
+        wasPausedBeforeScrubbing = nil
         if let url = securityScopedURL { url.stopAccessingSecurityScopedResource() }
         securityScopedURL = nil
     }
@@ -221,9 +226,20 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         revealControls()
     }
 
+    /// Playback pauses while the knob is held, so the picture follows it
+    /// frame by frame, and picks up again where it was let go if it was
+    /// playing before.
     private func seekPlayback(to seconds: Double, isFinal: Bool) {
         isScrubbing = !isFinal
+        if !isFinal, wasPausedBeforeScrubbing == nil {
+            wasPausedBeforeScrubbing = state.isPaused
+            engine?.setPaused(true)
+        }
         engine?.seek(to: seconds)
+        if isFinal, let wasPaused = wasPausedBeforeScrubbing {
+            wasPausedBeforeScrubbing = nil
+            engine?.setPaused(wasPaused)
+        }
         elapsed.stringValue = Self.time(seconds)
         remaining.stringValue = "-" + Self.time(state.duration - seconds)
         revealControls()
