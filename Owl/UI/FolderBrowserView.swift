@@ -19,6 +19,7 @@ struct FolderBrowserView: View {
     @State private var headerOriginX: CGFloat = 0
     @State private var toolbarControlsWidth: CGFloat = Self.minimumToolbarControlsWidth
     @State private var backButtonTrailing: CGFloat?
+    @State private var isFullScreen = false
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
     @AppStorage(LibrarySortOrder.defaultsKey) private var sortOrder: LibrarySortOrder = .name
@@ -51,7 +52,11 @@ struct FolderBrowserView: View {
         } detail: {
             browserDetail
                 .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
-                .ignoresSafeArea(.container, edges: .top)
+                // In fullscreen the toolbar is a band of its own laid over the
+                // top of the window, and a header run up under it would be
+                // hidden behind it; there the title goes in the toolbar and
+                // the content starts below it.
+                .ignoresSafeArea(.container, edges: isFullScreen ? [] : .top)
                 .toolbar {
                     // In the toolbar rather than the header: the header runs
                     // up under the title bar, where the toolbar takes every
@@ -68,6 +73,16 @@ struct FolderBrowserView: View {
                             .keyboardShortcut("[", modifiers: .command)
                             .help("Back")
                         }
+                    }
+
+                    if isFullScreen {
+                        ToolbarItem(placement: .navigation) {
+                            // Lined up with the grid's leading edge below.
+                            headerTitle
+                                .padding(.leading, 16)
+                                .padding(.trailing, 8)
+                        }
+                        .sharedBackgroundVisibility(.hidden)
                     }
 
                     // Without the spacer the menu lands right beside the
@@ -87,6 +102,10 @@ struct FolderBrowserView: View {
                 .focusedSceneValue(\.focusLibrarySearch) { isSearchFocused = true }
         }
         .navigationSplitViewStyle(.balanced)
+        .background {
+            FullScreenReader { isFullScreen = $0 }
+                .frame(width: 0, height: 0)
+        }
         .coordinateSpace(.named(Self.splitSpace))
         .background(Color(nsColor: .windowBackgroundColor))
         // The drag cursor's copy badge is the whole affordance: a border and a
@@ -202,7 +221,14 @@ struct FolderBrowserView: View {
     @ViewBuilder
     private var browserDetail: some View {
         VStack(spacing: 0) {
-            contentHeader
+            if isFullScreen {
+                // The header goes, but what it measures still holds the
+                // search field to its width.
+                toolbarWidthReader
+                    .frame(height: 0)
+            } else {
+                contentHeader
+            }
 
             ZStack {
                 Color(nsColor: .windowBackgroundColor)
@@ -258,35 +284,41 @@ struct FolderBrowserView: View {
         return max(base, backButtonTrailing + 12)
     }
 
+    private var headerTitle: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(detailTitle)
+                .font(.headline)
+                .lineLimit(1)
+
+            if selectedRoot != nil {
+                Text(itemCountText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
     private var contentHeader: some View {
         HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(detailTitle)
-                    .font(.headline)
-                    .lineLimit(1)
-
-                if selectedRoot != nil {
-                    Text(itemCountText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            headerTitle
 
             Spacer(minLength: 16)
         }
         .padding(.leading, headerLeadingInset)
         .padding(.trailing, toolbarControlsWidth)
-        .background {
-            TrailingToolbarWidthReader(minimum: Self.minimumToolbarControlsWidth) {
-                toolbarControlsWidth = $0
-            } onBackButtonChange: {
-                backButtonTrailing = $0
-            }
-        }
+        .background { toolbarWidthReader }
         .frame(height: 58)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.frame(in: .named(Self.splitSpace)).minX
         } action: { headerOriginX = $0 }
+    }
+
+    private var toolbarWidthReader: some View {
+        TrailingToolbarWidthReader(minimum: Self.minimumToolbarControlsWidth) {
+            toolbarControlsWidth = $0
+        } onBackButtonChange: {
+            backButtonTrailing = $0
+        }
     }
 
     private var sortMenu: some View {
@@ -1193,5 +1225,68 @@ private final class SidebarClaim: NSObject {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+    }
+}
+
+/// Reports whether the host window is in fullscreen, as it goes in and out,
+/// and gives the window an opaque title bar while it is there.
+///
+/// The window's title bar is transparent so the browser can run up under it.
+/// In fullscreen the toolbar moves to a window of AppKit's own, and over a
+/// transparent title bar that window draws the sidebar's part of the toolbar
+/// as a band of glass of its own, with a hairline under it, instead of letting
+/// the sidebar run up to the top of the screen.
+private struct FullScreenReader: NSViewRepresentable {
+    let onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> ReaderView {
+        let view = ReaderView()
+        view.onChange = onChange
+        return view
+    }
+
+    func updateNSView(_ view: ReaderView, context: Context) {
+        view.onChange = onChange
+    }
+
+    final class ReaderView: NSView {
+        var onChange: ((Bool) -> Void)?
+        private var reported: Bool?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            NotificationCenter.default.removeObserver(self)
+            guard let window else { return }
+            // Will rather than did, so the title moves as the window starts
+            // its animation instead of jumping once it has finished.
+            for name in [
+                NSWindow.willEnterFullScreenNotification, NSWindow.willExitFullScreenNotification,
+                NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification,
+            ] {
+                NotificationCenter.default.addObserver(
+                    self, selector: #selector(changed(_:)), name: name, object: window
+                )
+            }
+            report(window.styleMask.contains(.fullScreen))
+        }
+
+        @objc private func changed(_ notification: Notification) {
+            switch notification.name {
+            case NSWindow.willEnterFullScreenNotification: report(true)
+            case NSWindow.willExitFullScreenNotification: report(false)
+            default: report(window?.styleMask.contains(.fullScreen) ?? false)
+            }
+        }
+
+        private func report(_ isFullScreen: Bool) {
+            window?.titlebarAppearsTransparent = !isFullScreen
+            guard reported != isFullScreen else { return }
+            reported = isFullScreen
+            onChange?(isFullScreen)
+        }
+
+        deinit {
+            NotificationCenter.default.removeObserver(self)
+        }
     }
 }

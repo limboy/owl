@@ -3,6 +3,7 @@
 ## [Unreleased]
 - Sync Metadata is now on by default, so a new library shows titles and artwork from The Movie Database straight away; this sends video file names to TMDB, and it can be switched off from the Options menu; anyone who already set it keeps their choice
 - Remove window tabs: every video opens in a window of its own, and Show Tab Bar and Show All Tabs are gone from the View menu
+- In full screen, show the folder's name and item count in the toolbar instead of hidden behind it, and let the sidebar run up to the top of the screen without a band of its own
 - Give the Add Folder button the same Liquid Glass circle as the sidebar toggle beside it
 - Move the drag-a-folder hint under the Add Folder button on the empty library screen
 
