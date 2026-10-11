@@ -331,11 +331,13 @@ struct FolderBrowserView: View {
     private var noFoldersState: some View {
         ContentUnavailableView {
             Label("Build Your Library", systemImage: "rectangle.stack.badge.plus")
-        } description: {
-            Text("Add a video folder, or drag one anywhere into this window.")
         } actions: {
-            Button("Add Folder…", action: chooseFolders)
-                .buttonStyle(.borderedProminent)
+            VStack(spacing: 8) {
+                Button("Add Folder…", action: chooseFolders)
+                    .buttonStyle(.borderedProminent)
+                Text("or drag one anywhere into this window")
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
