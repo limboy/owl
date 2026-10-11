@@ -78,6 +78,11 @@ typedef void (*MVPMPVCallback)(void *context);
 typedef void *(*MVPMPVGetProcAddress)(void *context, const char *name);
 
 MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size);
+MVPMPVPlayer *mvp_mpv_create_preview(const char *library_path, char *error_buffer, size_t error_buffer_size);
+int mvp_mpv_initialize_software_renderer(MVPMPVPlayer *player);
+// RGBX pixels, top to bottom. Returns 0 without drawing when mpv has no new
+// frame, unless force is set. Call and destroy on the same serial render queue.
+int mvp_mpv_render_software(MVPMPVPlayer *player, void *pixels, int width, int height, size_t stride, bool force);
 void mvp_mpv_destroy(MVPMPVPlayer *player);
 uint64_t mvp_mpv_client_api_version(MVPMPVPlayer *player);
 const char *mvp_mpv_library_path(MVPMPVPlayer *player);

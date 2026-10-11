@@ -6,6 +6,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
+    MARKETING_VERSION: "1.7.1"
+    CURRENT_PROJECT_VERSION: "1"
     ARCHS: arm64
     MACOSX_DEPLOYMENT_TARGET: "26.0"
     SWIFT_VERSION: "6.0"
@@ -59,6 +61,10 @@ targets:
     dependencies:
       - target: CMPVShim
       - package: Sparkle
+      - target: OwlPreview
+        embed: true
+      - target: OwlThumbnail
+        embed: true
     info:
       path: Owl/Support/Info.plist
       properties:
@@ -75,8 +81,75 @@ targets:
         # already opens them with.
         #
         # The first entry covers everything the system knows is video. The
-        # second lists the containers it has no type for and only mpv can read,
-        # and is kept in step with FolderLibrary.videoExtensions.
+        # second lists extensions for Open With compatibility. Imported types
+        # above let Quick Look route containers macOS does not declare itself.
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: org.matroska.mkv
+            UTTypeDescription: Matroska Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [mkv]
+              public.mime-type: video/x-matroska
+          - UTTypeIdentifier: org.webmproject.webm
+            UTTypeDescription: WebM Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [webm]
+              public.mime-type: video/webm
+          - UTTypeIdentifier: com.microsoft.advanced-systems-format
+            UTTypeDescription: Advanced Systems Format
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [asf]
+              public.mime-type: video/x-ms-asf
+          - UTTypeIdentifier: com.microsoft.windows-media-wmv
+            UTTypeDescription: Windows Media Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [wmv]
+              public.mime-type: video/x-ms-wmv
+          - UTTypeIdentifier: com.divx.video
+            UTTypeDescription: DivX Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [divx]
+              public.mime-type: video/divx
+          - UTTypeIdentifier: com.adobe.flash.video
+            UTTypeDescription: Flash Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [flv]
+              public.mime-type: video/x-flv
+          - UTTypeIdentifier: com.adobe.f4v
+            UTTypeDescription: Flash MP4 Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [f4v]
+              public.mime-type: video/mp4
+          - UTTypeIdentifier: org.xiph.ogv
+            UTTypeDescription: Ogg Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [ogv, ogm]
+              public.mime-type: video/ogg
+          - UTTypeIdentifier: com.real.realmedia
+            UTTypeDescription: RealMedia Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [rm, rmvb]
+              public.mime-type: application/vnd.rn-realmedia
+          - UTTypeIdentifier: public.mpeg-2-transport-stream
+            UTTypeDescription: MPEG Transport Stream
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [ts, mts, m2t, m2ts]
+              public.mime-type: video/mp2t
+          - UTTypeIdentifier: public.mpeg-2-video
+            UTTypeDescription: MPEG-2 Video
+            UTTypeConformsTo: [public.movie]
+            UTTypeTagSpecification:
+              public.filename-extension: [vob]
+              public.mime-type: video/mpeg
         CFBundleDocumentTypes:
           - CFBundleTypeName: Video
             CFBundleTypeRole: Viewer
@@ -119,8 +192,6 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: me.limboy.owl
         PRODUCT_NAME: Owl
         PRODUCT_MODULE_NAME: Owl
-        MARKETING_VERSION: "1.7.1"
-        CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Owl
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.video
@@ -157,3 +228,119 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Owl.app/Contents/MacOS/Owl"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  OwlPreview:
+    type: app-extension
+    platform: macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.limboy.owl.preview
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        CODE_SIGN_ENTITLEMENTS: OwlQuickLook/Extension.entitlements
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../../../../Frameworks"
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+    sources:
+      - path: OwlQuickLook/Preview
+        excludes: ["*.entitlements"]
+      - Owl/Player/MPVPlayerEngine.swift
+      - Owl/Player/LibMPVLoader.swift
+      - Owl/Player/MPVCallbackContext.swift
+      - Owl/Player/PlayerState.swift
+      - Owl/Player/PlayerNotice.swift
+      - Owl/Player/Chapter.swift
+      - Owl/Player/SubtitleLanguage.swift
+    dependencies:
+      - target: CMPVShim
+        embed: false
+    info:
+      path: OwlQuickLook/Preview/Info.plist
+      properties:
+        CFBundleDisplayName: Owl Preview
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.quicklook.preview
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PreviewViewController
+          NSExtensionAttributes:
+            QLSupportedContentTypes:
+              - public.movie
+              - public.mpeg-4
+              - com.apple.quicktime-movie
+              - com.apple.m4v-video
+              - public.avi
+              - public.dv-movie
+              - public.mpeg
+              - public.3gpp
+              - public.3gpp2
+              - org.matroska.mkv
+              - org.webmproject.webm
+              - com.microsoft.advanced-systems-format
+              - com.microsoft.windows-media-wmv
+              - com.divx.video
+              - com.adobe.flash.video
+              - com.adobe.f4v
+              - org.xiph.ogv
+              - com.real.realmedia
+              - public.mpeg-2-transport-stream
+              - public.mpeg-2-video
+            QLSupportsSearchableItems: false
+  OwlThumbnail:
+    type: app-extension
+    platform: macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: me.limboy.owl.thumbnail
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        CODE_SIGN_ENTITLEMENTS: OwlQuickLook/Extension.entitlements
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../../../../Frameworks"
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "Developer ID Application"
+    sources:
+      - path: OwlQuickLook/Thumbnail
+        excludes: ["*.entitlements"]
+      - Owl/Player/LibMPVLoader.swift
+    dependencies:
+      - target: CMPVShim
+        embed: false
+    info:
+      path: OwlQuickLook/Thumbnail/Info.plist
+      properties:
+        CFBundleDisplayName: Owl Thumbnail
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.quicklook.thumbnail
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ThumbnailProvider
+          NSExtensionAttributes:
+            QLSupportedContentTypes:
+              - public.movie
+              - public.mpeg-4
+              - com.apple.quicktime-movie
+              - com.apple.m4v-video
+              - public.avi
+              - public.dv-movie
+              - public.mpeg
+              - public.3gpp
+              - public.3gpp2
+              - org.matroska.mkv
+              - org.webmproject.webm
+              - com.microsoft.advanced-systems-format
+              - com.microsoft.windows-media-wmv
+              - com.divx.video
+              - com.adobe.flash.video
+              - com.adobe.f4v
+              - org.xiph.ogv
+              - com.real.realmedia
+              - public.mpeg-2-transport-stream
+              - public.mpeg-2-video
+            QLThumbnailMinimumDimension: 0

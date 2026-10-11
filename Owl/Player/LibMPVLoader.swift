@@ -30,10 +30,12 @@ enum LibMPVLoader {
         return nil
     }
 
-    static func createPlayer() -> Result<(OpaquePointer, LibMPVInfo), LibMPVLoaderError> {
+    static func createPlayer(preview: Bool = false, libraryURL: URL? = nil) -> Result<(OpaquePointer, LibMPVInfo), LibMPVLoaderError> {
         var error = [CChar](repeating: 0, count: 1_024)
         let player = error.withUnsafeMutableBufferPointer { buffer in
-            mvp_mpv_create(buffer.baseAddress, buffer.count)
+            preview
+                ? mvp_mpv_create_preview(libraryURL?.path, buffer.baseAddress, buffer.count)
+                : mvp_mpv_create(buffer.baseAddress, buffer.count)
         }
 
         guard let player else {

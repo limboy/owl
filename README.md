@@ -26,6 +26,9 @@ itself through [Sparkle](https://sparkle-project.org).
 - **Player windows** — each video plays in its own window, sized to the video,
   with Liquid Glass controls that hide when you stop moving. Pin a window to
   keep it on top.
+- **Finder previews** — bundled Quick Look extensions provide video thumbnails
+  and a QuickTime-style Space-bar player for registered video formats,
+  including MKV and WebM.
 - **Timeline previews** — hover the timeline to see frames, in any format.
 - **Subtitles that stay put** — embedded or sidecar tracks, Dual Subtitles, and
   per-file track and delay remembered. Sidecar files are found even when
@@ -37,6 +40,28 @@ itself through [Sparkle](https://sparkle-project.org).
   Screenshots).
 - Audio track selection, speed from 0.5× to 2×, chapters, Open Recent, Now
   Playing, and media keys.
+
+## Finder previews
+
+Install Owl in Applications and launch it once so macOS can register its
+Quick Look extensions. If needed, enable **Owl Preview** and **Owl Thumbnail**
+in System Settings → General → Login Items & Extensions → Quick Look.
+Finder’s View Options must have **Show icon preview** enabled for thumbnails.
+These extensions work independently of which app is the default video player;
+macOS chooses between installed providers for a given file type.
+
+The preview opens paused, sized to the video, with a floating control bar for
+play/pause, seeking, and volume that fades out during playback; click the
+picture to play or pause. Frames are software-rendered at up to 1280 pixels on
+the long edge and 30 updates per second to work inside Finder’s remote view.
+Full-resolution/HDR playback remains in Owl. The extensions load the runtime
+from Owl’s bundle, which their sandbox can only read in `/Applications`.
+Files without a decodable video stream cannot produce a video thumbnail.
+The extension sandbox grants access to the selected file, so adjacent external
+subtitles are not loaded. Closing the preview stops its decoder.
+
+Development builds also require `scripts/bundle-mpv-deps.sh`: Finder extensions
+use the bundled runtime rather than a user's Homebrew installation.
 
 ## Keyboard shortcuts
 

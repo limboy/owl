@@ -83,8 +83,8 @@ final class MPVPlayerEngine: @unchecked Sendable {
     /// and `shutdown`, which runs at most once.
     private var wakeupContext: UnsafeMutableRawPointer?
 
-    init(state: PlayerState) throws {
-        switch LibMPVLoader.createPlayer() {
+    init(state: PlayerState, preview: Bool = false, libraryURL: URL? = nil) throws {
+        switch LibMPVLoader.createPlayer(preview: preview, libraryURL: libraryURL) {
         case .success(let result):
             handle = result.0
             info = result.1

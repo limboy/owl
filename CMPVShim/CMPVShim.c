@@ -103,7 +103,11 @@ enum {
     MPV_RENDER_PARAM_OPENGL_FBO = 3,
     MPV_RENDER_PARAM_FLIP_Y = 4,
     MPV_RENDER_PARAM_NEXT_FRAME_INFO = 11,
-    MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME = 12
+    MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME = 12,
+    MPV_RENDER_PARAM_SW_SIZE = 17,
+    MPV_RENDER_PARAM_SW_FORMAT = 18,
+    MPV_RENDER_PARAM_SW_STRIDE = 19,
+    MPV_RENDER_PARAM_SW_POINTER = 20
 };
 
 enum {
@@ -243,8 +247,8 @@ static bool bundled_library_path(char *out, size_t out_size) {
     return written > 0 && (size_t)written < out_size;
 }
 
-static void *open_libmpv(char *path, size_t path_size, char *error, size_t error_size) {
-    const char *override_path = getenv("OWL_LIBMPV_PATH");
+static void *open_libmpv(char *path, size_t path_size, char *error, size_t error_size, const char *library_path) {
+    const char *override_path = library_path != NULL ? library_path : getenv("OWL_LIBMPV_PATH");
     if (override_path != NULL && override_path[0] != '\0') {
         dlerror();
         void *library = dlopen(override_path, RTLD_NOW | RTLD_LOCAL);
@@ -257,7 +261,8 @@ static void *open_libmpv(char *path, size_t path_size, char *error, size_t error
         snprintf(
             message,
             sizeof(message),
-            "Could not load libmpv from OWL_LIBMPV_PATH (%s).%s%s",
+            "Could not load libmpv from %s (%s).%s%s",
+            library_path != NULL ? "the bundled runtime" : "OWL_LIBMPV_PATH",
             override_path,
             detail == NULL ? "" : "\n",
             detail == NULL ? "" : detail
@@ -305,7 +310,7 @@ static void *open_libmpv(char *path, size_t path_size, char *error, size_t error
     return NULL;
 }
 
-MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
+static MVPMPVPlayer *create_player(char *error_buffer, size_t error_buffer_size, bool preview, const char *library_path) {
     MVPMPVPlayer *player = calloc(1, sizeof(MVPMPVPlayer));
     if (player == NULL) {
         write_error(error_buffer, error_buffer_size, "Could not allocate the libmpv bridge.");
@@ -316,7 +321,8 @@ MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
         player->library_path,
         sizeof(player->library_path),
         error_buffer,
-        error_buffer_size
+        error_buffer_size,
+        library_path
     );
     if (player->library == NULL) {
         free(player);
@@ -376,6 +382,10 @@ MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
     }
 
     player->set_option_string(player->handle, "terminal", "no");
+    if (preview) {
+        player->set_option_string(player->handle, "config", "no");
+        player->set_option_string(player->handle, "audio-client-name", "Owl Quick Look");
+    }
     player->set_option_string(player->handle, "input-default-bindings", "no");
     player->set_option_string(player->handle, "input-vo-keyboard", "no");
     player->set_option_string(player->handle, "vo", "libmpv");
@@ -388,7 +398,7 @@ MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
     // takes Movie.srt; sub-file-paths adds the subdirectory that a season of
     // downloads usually keeps them in. Which of the found tracks is shown, if
     // any, is left to mpv's own preference order.
-    player->set_option_string(player->handle, "sub-auto", "fuzzy");
+    player->set_option_string(player->handle, "sub-auto", preview ? "no" : "fuzzy");
     player->set_option_string(player->handle, "sub-file-paths", "sub:subs:subtitles:Sub:Subs:Subtitles");
 
     // Show an embedded subtitle even when nothing marked it. mpv's own default
@@ -461,6 +471,14 @@ failure:
     }
     free(player);
     return NULL;
+}
+
+MVPMPVPlayer *mvp_mpv_create(char *error_buffer, size_t error_buffer_size) {
+    return create_player(error_buffer, error_buffer_size, false, NULL);
+}
+
+MVPMPVPlayer *mvp_mpv_create_preview(const char *library_path, char *error_buffer, size_t error_buffer_size) {
+    return create_player(error_buffer, error_buffer_size, true, library_path);
 }
 
 void mvp_mpv_destroy(MVPMPVPlayer *player) {
@@ -696,6 +714,33 @@ int mvp_mpv_initialize_renderer(
         write_mpv_error(player, error_buffer, error_buffer_size, "Could not create the mpv renderer", status);
     }
     return status;
+}
+
+int mvp_mpv_initialize_software_renderer(MVPMPVPlayer *player) {
+    if (player == NULL || player->handle == NULL || player->render_context != NULL) return -1;
+    mpv_render_param parameters[] = {
+        { MPV_RENDER_PARAM_API_TYPE, "sw" },
+        { MPV_RENDER_PARAM_INVALID, NULL }
+    };
+    return player->render_context_create(&player->render_context, player->handle, parameters);
+}
+
+int mvp_mpv_render_software(MVPMPVPlayer *player, void *pixels, int width, int height, size_t stride, bool force) {
+    if (player == NULL || player->render_context == NULL || pixels == NULL
+        || width <= 0 || height <= 0 || stride < (size_t)width * 4) return -1;
+    if (!(player->render_context_update(player->render_context) & 1) && !force) return 0;
+    int size[] = { width, height };
+    int block = 0;
+    mpv_render_param parameters[] = {
+        { MPV_RENDER_PARAM_SW_SIZE, size },
+        { MPV_RENDER_PARAM_SW_FORMAT, "rgb0" },
+        { MPV_RENDER_PARAM_SW_STRIDE, &stride },
+        { MPV_RENDER_PARAM_SW_POINTER, pixels },
+        { MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME, &block },
+        { MPV_RENDER_PARAM_INVALID, NULL }
+    };
+    int status = player->render_context_render(player->render_context, parameters);
+    return status < 0 ? status : 1;
 }
 
 void mvp_mpv_set_render_update_callback(
