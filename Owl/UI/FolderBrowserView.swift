@@ -43,7 +43,6 @@ struct FolderBrowserView: View {
                             .labelStyle(.iconOnly)
                             .help("Add Folder")
                     }
-                    .sharedBackgroundVisibility(.hidden)
                 }
                 .background {
                     SidebarToolbarPlacement()
