@@ -18,9 +18,9 @@ itself through [Sparkle](https://sparkle-project.org).
 - **Folder library** — add folders and browse them as a grid of thumbnails;
   they are watched for changes. Search a folder by file name or matched title
   (`⌘F`), and sort it by name, date added, or recently watched.
-- **Metadata sync** — optionally match videos against
+- **Metadata sync** — match videos against
   [The Movie Database](https://www.themoviedb.org) for titles, descriptions,
-  and artwork. Off by default.
+  and artwork. On by default; switch it off from the Options menu.
 - **Resume anywhere** — every file keeps its position and watched state; cards
   show progress at a glance.
 - **Player windows** — each video plays in its own window, sized to the video,

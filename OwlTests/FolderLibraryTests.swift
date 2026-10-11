@@ -161,9 +161,9 @@ final class FolderLibraryTests: XCTestCase {
             onlineMetadataService: OnlineMetadataService(client: nil, store: makeStore()),
             defaults: defaults
         )
-        XCTAssertFalse(library.isMetadataSyncEnabled, "syncing should be off until asked for")
+        XCTAssertTrue(library.isMetadataSyncEnabled, "syncing should be on until switched off")
 
-        library.isMetadataSyncEnabled = true
+        library.isMetadataSyncEnabled = false
 
         let restored = FolderLibrary(
             storageURL: storageURL,
@@ -171,7 +171,7 @@ final class FolderLibraryTests: XCTestCase {
             onlineMetadataService: OnlineMetadataService(client: nil, store: makeStore()),
             defaults: defaults
         )
-        XCTAssertTrue(restored.isMetadataSyncEnabled)
+        XCTAssertFalse(restored.isMetadataSyncEnabled)
     }
 
     // MARK: - Metadata sync helpers

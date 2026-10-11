@@ -2,13 +2,13 @@ import Foundation
 
 /// Whether the browser should look up what its videos are.
 ///
-/// Off by default. Looking a folder up means telling a third party the names of
-/// the files in it, which is not something to start doing on somebody's behalf.
+/// On by default, so a new library shows titles and artwork straight away. It
+/// can be switched off from the Options menu, after which nothing is sent.
 enum MetadataSyncPreference {
     static let defaultsKey = "MetadataSyncEnabled"
 
     static func isEnabled(defaults: UserDefaults = .standard) -> Bool {
-        defaults.object(forKey: defaultsKey) as? Bool ?? false
+        defaults.object(forKey: defaultsKey) as? Bool ?? true
     }
 
     static func setEnabled(_ isEnabled: Bool, defaults: UserDefaults = .standard) {
