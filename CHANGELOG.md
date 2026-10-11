@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [1.9.1] - 2026-10-11
 - Dragging along the seek bar pauses the video and shows the frame under the pointer as it moves, in Owl and in Finder previews; letting go picks up where it was dragged to, playing again if it was playing before
 - Keep Finder's preview column and Preview pane paused until asked to play; only the Space bar preview starts playing as it opens
 
