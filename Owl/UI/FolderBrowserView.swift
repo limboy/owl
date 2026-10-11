@@ -19,6 +19,7 @@ struct FolderBrowserView: View {
     @State private var headerOriginX: CGFloat = 0
     @State private var toolbarControlsWidth: CGFloat = Self.minimumToolbarControlsWidth
     @State private var backButtonTrailing: CGFloat?
+    @State private var lastBackButtonTrailing: CGFloat?
     @State private var isFullScreen = false
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
@@ -65,9 +66,7 @@ struct FolderBrowserView: View {
                     if library.navigationPath.count > 1 {
                         ToolbarItem(id: TrailingToolbarWidthReader.backID, placement: .navigation) {
                             Button("Back", systemImage: "chevron.left") {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    library.goBack()
-                                }
+                                library.goBack()
                             }
                             .labelStyle(.iconOnly)
                             .keyboardShortcut("[", modifiers: .command)
@@ -277,11 +276,15 @@ struct FolderBrowserView: View {
     /// with it.
     ///
     /// The Back button sits in that strip too, wherever the toolbar puts it,
-    /// so the title starts past it.
+    /// so the title starts past it. The button is only measured once the
+    /// toolbar has laid it out, a pass after the folder opens; until then the
+    /// title goes where the button last was, rather than starting at the
+    /// edge and hopping over once it is found.
     private var headerLeadingInset: CGFloat {
         let base = max(24, Self.titleBarControlsWidth - headerOriginX)
-        guard let backButtonTrailing else { return base }
-        return max(base, backButtonTrailing + 12)
+        guard library.navigationPath.count > 1,
+              let back = backButtonTrailing ?? lastBackButtonTrailing else { return base }
+        return max(base, back + 12)
     }
 
     private var headerTitle: some View {
@@ -318,6 +321,7 @@ struct FolderBrowserView: View {
             toolbarControlsWidth = $0
         } onBackButtonChange: {
             backButtonTrailing = $0
+            if let back = $0 { lastBackButtonTrailing = back }
         }
     }
 
@@ -531,9 +535,7 @@ struct FolderBrowserView: View {
     private func open(_ entry: BrowserEntry) {
         switch entry.kind {
         case .folder:
-            withAnimation(.easeInOut(duration: 0.2)) {
-                library.openFolder(entry.url)
-            }
+            library.openFolder(entry.url)
         case .video:
             player.play(
                 entry.url,
