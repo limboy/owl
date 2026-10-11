@@ -1,6 +1,7 @@
 # Changelog
 
 ## [Unreleased]
+- Keep Finder's preview column and Preview pane paused until asked to play; only the Space bar preview starts playing as it opens
 
 ## [1.9.0] - 2026-10-11
 - Sync Metadata is now on by default, so a new library shows titles and artwork from The Movie Database straight away; this sends video file names to TMDB, and it can be switched off from the Options menu; anyone who already set it keeps their choice

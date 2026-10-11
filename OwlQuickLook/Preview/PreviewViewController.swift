@@ -176,8 +176,21 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
     private func completePreparation(startingPlayback: Bool = true) {
         guard let completion = pendingCompletion else { return }
         pendingCompletion = nil
-        if startingPlayback, state.errorMessage == nil { engine?.setPaused(false) }
+        if startingPlayback, state.errorMessage == nil, isInQuickLookPanel { engine?.setPaused(false) }
         completion(nil)
+    }
+
+    /// Whether this is the Space-bar panel rather than Finder's preview
+    /// column or pane, which only shows a still until asked to play.
+    ///
+    /// Both host the same extension in the same kind of window, and nothing
+    /// says which is which. The panel, though, takes the size asked for in
+    /// `preferredContentSize`, while Finder's preview keeps the shape of its
+    /// column whatever the video's.
+    private var isInQuickLookPanel: Bool {
+        guard let size = view.window?.frame.size else { return false }
+        return abs(size.width - preferredContentSize.width) < 2
+            && abs(size.height - preferredContentSize.height) < 2
     }
 
     private func tearDown() {
