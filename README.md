@@ -50,9 +50,9 @@ Finder’s View Options must have **Show icon preview** enabled for thumbnails.
 These extensions work independently of which app is the default video player;
 macOS chooses between installed providers for a given file type.
 
-The preview opens paused, sized to the video, with a floating control bar for
-play/pause, seeking, and volume that fades out during playback; click the
-picture to play or pause. Frames are software-rendered at up to 1280 pixels on
+The preview opens sized to the video and starts playing, with a QuickTime-style
+glass bar for play/pause, seeking, and volume that fades out during playback;
+click the picture to play or pause. Frames are software-rendered at up to 1280 pixels on
 the long edge and 30 updates per second to work inside Finder’s remote view.
 Full-resolution/HDR playback remains in Owl. The extensions load the runtime
 from Owl’s bundle, which their sandbox can only read in `/Applications`.

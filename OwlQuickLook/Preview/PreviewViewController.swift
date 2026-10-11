@@ -3,8 +3,9 @@ import Combine
 import Quartz
 import OSLog
 
-/// A QuickTime-style player: the picture fills the panel and a translucent
-/// control bar floats over it, fading out while the video plays untouched.
+/// A QuickTime-style player: the picture fills the panel, playback starts as
+/// it opens, and a glass control bar floats over it, fading out while the
+/// video plays untouched.
 @MainActor
 final class PreviewViewController: NSViewController, @preconcurrency QLPreviewingController {
     private let state = PlayerState()
@@ -15,13 +16,13 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
     private var securityScopedURL: URL?
 
     private let surface = PreviewSurfaceView()
-    private let bar = NSVisualEffectView()
-    private let play = PreviewViewController.symbolButton("play.fill", label: "Play")
+    private let bar = NSGlassEffectView()
+    private let play = PreviewViewController.symbolButton("pause.fill", label: "Pause", size: 22)
     private let elapsed = PreviewViewController.timeLabel()
-    private let seek = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
+    private let seek = PreviewScrubber(knobDiameter: 24, label: "Playback position")
     private let remaining = PreviewViewController.timeLabel()
-    private let mute = PreviewViewController.symbolButton("speaker.wave.2.fill", label: "Mute")
-    private let volume = NSSlider(value: 100, minValue: 0, maxValue: 100, target: nil, action: nil)
+    private let mute = PreviewViewController.symbolButton("speaker.wave.2.fill", label: "Mute", size: 16)
+    private let volume = PreviewScrubber(knobDiameter: 14, label: "Volume")
     private let spinner = NSProgressIndicator()
     private let message = NSTextField(wrappingLabelWithString: "")
 
@@ -45,25 +46,16 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
 
         play.target = self
         play.action = #selector(togglePlayback)
-        seek.target = self
-        seek.action = #selector(seekPlayback)
-        seek.isContinuous = true
-        seek.controlSize = .small
-        seek.setAccessibilityLabel("Playback position")
+        seek.onChange = { [weak self] value, isFinal in self?.seekPlayback(to: value, isFinal: isFinal) }
         mute.target = self
         mute.action = #selector(toggleMute)
-        volume.target = self
-        volume.action = #selector(changeVolume)
-        volume.controlSize = .small
-        volume.setAccessibilityLabel("Volume")
+        volume.maxValue = 100
+        volume.value = 100
+        volume.onChange = { [weak self] value, _ in self?.changeVolume(to: value) }
 
-        bar.material = .hudWindow
-        bar.blendingMode = .withinWindow
-        bar.state = .active
-        bar.wantsLayer = true
-        bar.layer?.cornerRadius = 12
-        bar.layer?.cornerCurve = .continuous
-        bar.layer?.masksToBounds = true
+        bar.cornerRadius = 22
+        let content = NSView()
+        bar.contentView = content
         let tracking = PreviewBarTrackingView()
         tracking.onHoverChange = { [weak self] inside in
             self?.isPointerOverBar = inside
@@ -73,13 +65,16 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         let row = NSStackView(views: [play, elapsed, seek, remaining, mute, volume])
         row.orientation = .horizontal
         row.alignment = .centerY
-        row.spacing = 10
-        row.setCustomSpacing(14, after: play)
-        row.setCustomSpacing(16, after: remaining)
-        row.setCustomSpacing(4, after: mute)
+        row.spacing = 12
+        row.setCustomSpacing(20, after: play)
+        row.setCustomSpacing(14, after: elapsed)
+        row.setCustomSpacing(14, after: seek)
+        row.setCustomSpacing(18, after: remaining)
+        row.setCustomSpacing(6, after: mute)
         // In a narrow (portrait) panel, give up volume before the scrubber.
-        row.setVisibilityPriority(NSStackView.VisibilityPriority(rawValue: 600), for: volume)
-        row.setVisibilityPriority(.detachOnlyIfNecessary, for: mute)
+        row.setVisibilityPriority(NSStackView.VisibilityPriority(rawValue: 500), for: volume)
+        row.setVisibilityPriority(NSStackView.VisibilityPriority(rawValue: 600), for: mute)
+        row.setVisibilityPriority(NSStackView.VisibilityPriority(rawValue: 800), for: remaining)
         seek.setContentHuggingPriority(.defaultLow, for: .horizontal)
         seek.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
@@ -97,31 +92,28 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         }
         for child in [tracking, row] as [NSView] {
             child.translatesAutoresizingMaskIntoConstraints = false
-            bar.addSubview(child)
+            content.addSubview(child)
         }
-        let barWidth = bar.widthAnchor.constraint(equalToConstant: 560)
-        // Below the hosting window's own size constraints, so a narrow panel
-        // shrinks the bar instead of the bar widening the panel.
-        barWidth.priority = .defaultLow
         NSLayoutConstraint.activate([
             surface.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             surface.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             surface.topAnchor.constraint(equalTo: root.topAnchor),
             surface.bottomAnchor.constraint(equalTo: root.bottomAnchor),
 
-            bar.centerXAnchor.constraint(equalTo: root.centerXAnchor),
-            bar.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
-            bar.leadingAnchor.constraint(greaterThanOrEqualTo: root.leadingAnchor, constant: 16),
-            bar.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -16),
-            barWidth,
-            bar.heightAnchor.constraint(equalToConstant: 40),
-            tracking.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
-            tracking.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
-            tracking.topAnchor.constraint(equalTo: bar.topAnchor),
-            tracking.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
-            row.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 12),
-            row.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -14),
-            row.centerYAnchor.constraint(equalTo: bar.centerYAnchor),
+            bar.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
+            bar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
+            bar.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -12),
+            bar.heightAnchor.constraint(equalToConstant: 48),
+            tracking.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            tracking.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            tracking.topAnchor.constraint(equalTo: content.topAnchor),
+            tracking.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            row.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
+            row.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
+            row.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            row.heightAnchor.constraint(equalTo: content.heightAnchor),
+            seek.heightAnchor.constraint(equalTo: row.heightAnchor),
+            volume.heightAnchor.constraint(equalTo: row.heightAnchor),
             volume.widthAnchor.constraint(equalToConstant: 64),
             seek.widthAnchor.constraint(greaterThanOrEqualToConstant: 80),
 
@@ -161,8 +153,9 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
             revealControls()
             updateControls()
             // Quick Look sizes the panel from preferredContentSize when we
-            // complete, so wait briefly for the video's shape. Decoding
-            // errors appear in the view rather than failing the preview.
+            // complete, so wait briefly for the video's shape; playback starts
+            // as the panel appears. Decoding errors appear in the view rather
+            // than failing the preview.
             pendingCompletion = handler
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let self, generation == currentGeneration else { return }
@@ -180,13 +173,15 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         tearDown()
     }
 
-    private func completePreparation() {
-        pendingCompletion?(nil)
+    private func completePreparation(startingPlayback: Bool = true) {
+        guard let completion = pendingCompletion else { return }
         pendingCompletion = nil
+        if startingPlayback, state.errorMessage == nil { engine?.setPaused(false) }
+        completion(nil)
     }
 
     private func tearDown() {
-        completePreparation()
+        completePreparation(startingPlayback: false)
         hideControls?.cancel()
         hideControls = nil
         renderer?.stop()
@@ -213,14 +208,11 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         revealControls()
     }
 
-    @objc private func seekPlayback() {
-        switch NSApp.currentEvent?.type {
-        case .leftMouseDown, .leftMouseDragged: isScrubbing = true
-        default: isScrubbing = false
-        }
-        engine?.seek(to: seek.doubleValue)
-        elapsed.stringValue = Self.time(seek.doubleValue)
-        remaining.stringValue = "-" + Self.time(state.duration - seek.doubleValue)
+    private func seekPlayback(to seconds: Double, isFinal: Bool) {
+        isScrubbing = !isFinal
+        engine?.seek(to: seconds)
+        elapsed.stringValue = Self.time(seconds)
+        remaining.stringValue = "-" + Self.time(state.duration - seconds)
         revealControls()
     }
 
@@ -229,9 +221,9 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         revealControls()
     }
 
-    @objc private func changeVolume() {
-        engine?.setVolume(volume.doubleValue)
-        if state.isMuted, volume.doubleValue > 0 { engine?.toggleMute() }
+    private func changeVolume(to value: Double) {
+        engine?.setVolume(value)
+        if state.isMuted, value > 0 { engine?.toggleMute() }
         revealControls()
     }
 
@@ -247,11 +239,11 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         seek.isEnabled = ready && state.duration > 0
         seek.maxValue = max(1, state.duration)
         if !isScrubbing {
-            seek.doubleValue = state.currentTime
+            seek.value = state.currentTime
             elapsed.stringValue = Self.time(state.currentTime)
             remaining.stringValue = "-" + Self.time(state.duration - state.currentTime)
         }
-        if volume.doubleValue != state.volume { volume.doubleValue = state.volume }
+        if !volume.isTracking { volume.value = state.isMuted ? 0 : state.volume }
 
         if state.isLoading && engine != nil { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         message.stringValue = state.errorMessage ?? ""
@@ -310,13 +302,13 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         return NSSize(width: width.rounded(), height: height.rounded())
     }
 
-    private static func symbolButton(_ name: String, label: String) -> NSButton {
+    private static func symbolButton(_ name: String, label: String, size: CGFloat) -> NSButton {
         let button = NSButton()
         button.isBordered = false
         button.bezelStyle = .regularSquare
         button.imagePosition = .imageOnly
-        button.contentTintColor = .white
-        button.symbolConfiguration = .init(pointSize: 15, weight: .semibold)
+        button.contentTintColor = NSColor.white.withAlphaComponent(0.9)
+        button.symbolConfiguration = .init(pointSize: size, weight: .regular)
         setSymbol(button, name, label: label)
         button.setContentHuggingPriority(.required, for: .horizontal)
         return button
@@ -330,9 +322,9 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
     }
 
     private static func timeLabel() -> NSTextField {
-        let label = NSTextField(labelWithString: "0:00")
-        label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
-        label.textColor = NSColor.white.withAlphaComponent(0.85)
+        let label = NSTextField(labelWithString: "00:00")
+        label.font = .monospacedDigitSystemFont(ofSize: 15, weight: .regular)
+        label.textColor = NSColor.white.withAlphaComponent(0.75)
         label.setContentHuggingPriority(.required, for: .horizontal)
         label.setContentCompressionResistancePriority(.required, for: .horizontal)
         return label
@@ -343,7 +335,7 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         let hours = total / 3600, minutes = total / 60 % 60, secs = total % 60
         return hours > 0
             ? String(format: "%d:%02d:%02d", hours, minutes, secs)
-            : String(format: "%d:%02d", minutes, secs)
+            : String(format: "%02d:%02d", minutes, secs)
     }
 
     isolated deinit {
@@ -411,5 +403,87 @@ private final class PreviewSurfaceView: NSView {
     override func mouseUp(with event: NSEvent) {
         // Finder's remote view can report a click count of 0.
         if event.clickCount < 2 { onClick?() }
+    }
+}
+
+/// QuickTime's scrubber: a thin track, white where it has played, and a
+/// large white knob.
+private final class PreviewScrubber: NSView {
+    var onChange: ((Double, Bool) -> Void)?
+    var maxValue: Double = 1 { didSet { if maxValue != oldValue { needsDisplay = true } } }
+    var value: Double = 0 {
+        didSet { if value != oldValue { needsDisplay = true; setAccessibilityValue(value) } }
+    }
+    var isEnabled = true { didSet { if isEnabled != oldValue { needsDisplay = true } } }
+    private(set) var isTracking = false
+    private let knobDiameter: CGFloat
+    private let trackHeight: CGFloat = 4
+
+    init(knobDiameter: CGFloat, label: String) {
+        self.knobDiameter = knobDiameter
+        super.init(frame: .zero)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.slider)
+        setAccessibilityLabel(label)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: knobDiameter + 4) }
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    private var fraction: CGFloat {
+        maxValue > 0 ? CGFloat(min(max(value / maxValue, 0), 1)) : 0
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let inset = knobDiameter / 2
+        let track = NSRect(x: inset, y: bounds.midY - trackHeight / 2,
+                           width: max(0, bounds.width - knobDiameter), height: trackHeight)
+        let knobX = track.minX + track.width * fraction
+        NSColor.white.withAlphaComponent(0.3).setFill()
+        NSBezierPath(roundedRect: track, xRadius: trackHeight / 2, yRadius: trackHeight / 2).fill()
+        var played = track
+        played.size.width = knobX - track.minX
+        NSColor.white.withAlphaComponent(isEnabled ? 0.95 : 0.5).setFill()
+        NSBezierPath(roundedRect: played, xRadius: trackHeight / 2, yRadius: trackHeight / 2).fill()
+        guard isEnabled else { return }
+        let knob = NSRect(x: knobX - knobDiameter / 2, y: bounds.midY - knobDiameter / 2,
+                          width: knobDiameter, height: knobDiameter)
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
+        shadow.shadowBlurRadius = 3
+        shadow.shadowOffset = NSSize(width: 0, height: -1)
+        shadow.set()
+        NSColor.white.setFill()
+        NSBezierPath(ovalIn: knob).fill()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabled else { return }
+        isTracking = true
+        update(with: event, isFinal: false)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard isTracking else { return }
+        update(with: event, isFinal: false)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard isTracking else { return }
+        isTracking = false
+        update(with: event, isFinal: true)
+    }
+
+    private func update(with event: NSEvent, isFinal: Bool) {
+        let point = convert(event.locationInWindow, from: nil)
+        let width = max(1, bounds.width - knobDiameter)
+        let fraction = min(max((point.x - knobDiameter / 2) / width, 0), 1)
+        value = Double(fraction) * maxValue
+        onChange?(value, isFinal)
     }
 }
