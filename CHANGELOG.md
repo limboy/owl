@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-10-12
+- Simplify Finder's thumbnail preview to a centered play/pause button, preserving Quick Look's controls
+- Prevent Search from receiving focus when closing the sidebar
+
 ## [1.9.1] - 2026-10-11
 - Dragging along the seek bar pauses the video and shows the frame under the pointer as it moves, in Owl and in Finder previews; letting go picks up where it was dragged to, playing again if it was playing before
 - Keep Finder's preview column and Preview pane paused until asked to play; only the Space bar preview starts playing as it opens
