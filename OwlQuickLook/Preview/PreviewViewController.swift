@@ -3,9 +3,8 @@ import Combine
 import Quartz
 import OSLog
 
-/// A QuickTime-style player: the picture fills the panel, playback starts as
-/// it opens, and a glass control bar floats over it, fading out while the
-/// video plays untouched.
+/// A QuickTime-style player with a floating control bar in Quick Look and
+/// a single centered playback button in Finder's preview pane.
 @MainActor
 final class PreviewViewController: NSViewController, @preconcurrency QLPreviewingController {
     private let state = PlayerState()
@@ -17,6 +16,8 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
 
     private let surface = PreviewSurfaceView()
     private let bar = NSGlassEffectView()
+    private let thumbnailControls = NSGlassEffectView()
+    private let thumbnailPlay = PreviewViewController.symbolButton("play.fill", label: "Play", size: 22)
     private let play = PreviewViewController.symbolButton("pause.fill", label: "Pause", size: 22)
     private let elapsed = PreviewViewController.timeLabel()
     private let seek = PreviewScrubber(knobDiameter: 24, label: "Playback position")
@@ -49,6 +50,8 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
 
         play.target = self
         play.action = #selector(togglePlayback)
+        thumbnailPlay.target = self
+        thumbnailPlay.action = #selector(togglePlayback)
         seek.onChange = { [weak self] value, isFinal in self?.seekPlayback(to: value, isFinal: isFinal) }
         mute.target = self
         mute.action = #selector(toggleMute)
@@ -59,6 +62,10 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         bar.cornerRadius = 22
         let content = NSView()
         bar.contentView = content
+        thumbnailControls.cornerRadius = 26
+        thumbnailControls.contentView = thumbnailPlay
+        bar.isHidden = true
+        thumbnailControls.isHidden = true
         let tracking = PreviewBarTrackingView()
         tracking.onHoverChange = { [weak self] inside in
             self?.isPointerOverBar = inside
@@ -89,7 +96,7 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         message.font = .systemFont(ofSize: 13)
         message.isHidden = true
 
-        for child in [surface, spinner, message, bar] as [NSView] {
+        for child in [surface, spinner, message, bar, thumbnailControls] as [NSView] {
             child.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(child)
         }
@@ -119,6 +126,11 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
             volume.heightAnchor.constraint(equalTo: row.heightAnchor),
             volume.widthAnchor.constraint(equalToConstant: 64),
             seek.widthAnchor.constraint(greaterThanOrEqualToConstant: 80),
+
+            thumbnailControls.centerXAnchor.constraint(equalTo: root.centerXAnchor),
+            thumbnailControls.centerYAnchor.constraint(equalTo: root.centerYAnchor),
+            thumbnailControls.widthAnchor.constraint(equalToConstant: 52),
+            thumbnailControls.heightAnchor.constraint(equalToConstant: 52),
 
             spinner.centerXAnchor.constraint(equalTo: root.centerXAnchor),
             spinner.centerYAnchor.constraint(equalTo: root.centerYAnchor),
@@ -174,6 +186,16 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
     override func viewDidDisappear() {
         super.viewDidDisappear()
         tearDown()
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        updateControlsPresentation()
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        updateControlsPresentation()
     }
 
     private func completePreparation(startingPlayback: Bool = true) {
@@ -261,7 +283,10 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
     private func updateControls() {
         let ready = engine != nil && !state.isLoading && state.errorMessage == nil
         play.isEnabled = ready
+        thumbnailPlay.isEnabled = ready
         Self.setSymbol(play, state.isPaused ? "play.fill" : "pause.fill",
+                       label: state.isPaused ? "Play" : "Pause")
+        Self.setSymbol(thumbnailPlay, state.isPaused ? "play.fill" : "pause.fill",
                        label: state.isPaused ? "Play" : "Pause")
         Self.setSymbol(mute, state.isMuted || state.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill",
                        label: state.isMuted ? "Unmute" : "Mute")
@@ -277,7 +302,6 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
         if state.isLoading && engine != nil { spinner.startAnimation(nil) } else { spinner.stopAnimation(nil) }
         message.stringValue = state.errorMessage ?? ""
         message.isHidden = state.errorMessage == nil
-        bar.isHidden = state.errorMessage != nil
 
         if let aspect = state.videoAspectRatio, aspect.isFinite, aspect > 0, aspect != appliedAspectRatio {
             appliedAspectRatio = aspect
@@ -285,10 +309,17 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
             preferredContentSize = Self.panelSize(for: aspect)
         }
         if appliedAspectRatio != nil || state.errorMessage != nil { completePreparation() }
+        updateControlsPresentation()
         if state.isPaused { revealControls() } else if hideControls == nil, bar.alphaValue > 0 { scheduleHideControls(after: 2) }
     }
 
     // MARK: - Controls visibility
+
+    private func updateControlsPresentation() {
+        let isPanel = isInQuickLookPanel
+        bar.isHidden = !isPanel || state.errorMessage != nil
+        thumbnailControls.isHidden = isPanel || engine == nil || state.isLoading || state.errorMessage != nil
+    }
 
     private func revealControls() {
         hideControls?.cancel()
@@ -297,6 +328,7 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.15
                 bar.animator().alphaValue = 1
+                thumbnailControls.animator().alphaValue = 1
             }
         }
         if !state.isPaused { scheduleHideControls(after: 2.5) }
@@ -311,6 +343,7 @@ final class PreviewViewController: NSViewController, @preconcurrency QLPreviewin
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.4
                 self.bar.animator().alphaValue = 0
+                self.thumbnailControls.animator().alphaValue = 0
             }
         }
         hideControls = work
