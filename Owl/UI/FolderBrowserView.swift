@@ -15,7 +15,9 @@ struct FolderBrowserView: View {
     @State private var destination: BrowserDestination?
     @State private var didRestoreLocation = false
     @State private var pendingRootSelectionID: UUID?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     @FocusState private var isSidebarFocused: Bool
+    @FocusState private var isBrowserFocused: Bool
     @State private var headerOriginX: CGFloat = 0
     @State private var toolbarControlsWidth: CGFloat = Self.minimumToolbarControlsWidth
     @State private var backButtonTrailing: CGFloat?
@@ -36,7 +38,7 @@ struct FolderBrowserView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             sidebar
                 .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 300)
                 .toolbar {
@@ -53,6 +55,9 @@ struct FolderBrowserView: View {
         } detail: {
             browserDetail
                 .frame(minWidth: 430, maxWidth: .infinity, maxHeight: .infinity)
+                .focusable()
+                .focused($isBrowserFocused)
+                .focusEffectDisabled()
                 // In fullscreen the toolbar is a band of its own laid over the
                 // top of the window, and a header run up under it would be
                 // hidden behind it; there the title goes in the toolbar and
@@ -101,6 +106,13 @@ struct FolderBrowserView: View {
                 .focusedSceneValue(\.focusLibrarySearch) { isSearchFocused = true }
         }
         .navigationSplitViewStyle(.balanced)
+        .onChange(of: columnVisibility) { _, visibility in
+            guard visibility == .detailOnly else { return }
+            // Collapsing a focused sidebar otherwise transfers focus to the
+            // toolbar search field, the next editable control in the window.
+            isSearchFocused = false
+            isBrowserFocused = true
+        }
         .background {
             FullScreenReader { isFullScreen = $0 }
                 .frame(width: 0, height: 0)
