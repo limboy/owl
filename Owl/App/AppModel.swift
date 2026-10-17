@@ -205,7 +205,6 @@ final class AppModel: ObservableObject {
     func seek(by seconds: Double) {
         guard playerState.hasMedia else { return }
         engine?.seek(by: seconds)
-        playerState.announce(.position)
     }
 
     func playNextChapter() {

@@ -60,15 +60,25 @@ final class PlayerNoticeTests: XCTestCase {
 
     /// Pressing the key twice has to flash the indicator twice, even though
     /// the notice itself is the same both times.
-    func testEverySeekAndPositionRequestFlashesTheIndicator() {
+    func testEveryPositionRequestFlashesTheIndicator() {
         let before = model.playerState.noticeRevision
 
-        model.seek(by: 5)
         model.showPosition()
         model.showPosition()
 
         XCTAssertEqual(model.playerState.notice, .position)
-        XCTAssertEqual(model.playerState.noticeRevision, before + 3)
+        XCTAssertEqual(model.playerState.noticeRevision, before + 2)
+    }
+
+    /// Skipping forward or back moves the picture on its own; it puts
+    /// nothing over it.
+    func testSeekingAnnouncesNothing() {
+        let before = model.playerState.noticeRevision
+
+        model.seek(by: 5)
+        model.seek(by: -5)
+
+        XCTAssertEqual(model.playerState.noticeRevision, before)
     }
 
     /// The clock moves with the jump rather than when mpv reports it, so a

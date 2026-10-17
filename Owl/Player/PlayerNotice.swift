@@ -6,8 +6,7 @@ import Foundation
 /// menu bar, the media keys, or by dropping a file on the window — and a change
 /// made where nothing on screen shows it has to say so. With the controls
 /// hidden, and always in full screen, the volume, the speed and the subtitles
-/// would otherwise appear to have shifted by themselves, and a seek would have
-/// nothing to say where it landed. Carries the value rather than the sentence:
+/// would otherwise appear to have shifted by themselves. Carries the value rather than the sentence:
 /// the wording belongs to the view that draws it.
 enum PlayerNotice: Equatable, Sendable {
     case subtitleDelay(Double)
@@ -18,9 +17,9 @@ enum PlayerNotice: Equatable, Sendable {
     case speed(Double)
     /// The chapter just moved to, by name.
     case chapter(String)
-    /// Where playback is in the file. Carries nothing because the indicator
-    /// reads the live position for as long as it is up: a seek is reported
-    /// before mpv has finished it, and the clock keeps moving afterwards.
+    /// Where playback is in the file, when asked for. Carries nothing because
+    /// the indicator reads the live position for as long as it is up, and the
+    /// clock keeps moving while it is.
     case position
     /// A screenshot was saved, and whether the subtitles are in it.
     case screenshot(includesSubtitles: Bool)
