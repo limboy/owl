@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-10-18
+- Stop showing the time toast when skipping forward or back; the picture moving is enough
+
 ## [1.9.2] - 2026-10-12
 - Simplify Finder's thumbnail preview to a centered play/pause button, preserving Quick Look's controls
 - Prevent Search from receiving focus when closing the sidebar
