@@ -170,6 +170,10 @@ final class MPVPlayerEngine: @unchecked Sendable {
     /// cost an order of magnitude less.
     private static let timePositionInterval: TimeInterval = 0.25
 
+    /// Whether mpv is holding the current file on its last frame after
+    /// playing to the end. Read and written on the main actor only.
+    private var isAtEnd = false
+
     /// The newest position mpv has reported since the last one published.
     /// Event-queue state, like everything else the drain touches.
     private var pendingTimePosition: Double?
@@ -238,10 +242,16 @@ final class MPVPlayerEngine: @unchecked Sendable {
             // Reported the same way `end-file` normally would be, generation
             // and all, so a stale flip after a manual Previous/Next is
             // dropped the same way a stale end-of-file report is.
-            if name == "eof-reached", valueType == MVP_MPV_VALUE_FLAG, flag {
+            if name == "eof-reached", valueType == MVP_MPV_VALUE_FLAG {
                 let endedGeneration = loadGeneration
                 Task { @MainActor [weak self] in
-                    self?.onPlaybackEnded?(endedGeneration)
+                    guard let self else { return }
+                    if isMostRecentLoad(endedGeneration) {
+                        isAtEnd = flag
+                    }
+                    if flag {
+                        onPlaybackEnded?(endedGeneration)
+                    }
                 }
                 return
             }
@@ -466,6 +476,7 @@ final class MPVPlayerEngine: @unchecked Sendable {
         startsPaused: Bool = false
     ) -> Int {
         let generation = bumpLoadGeneration()
+        isAtEnd = false
         state.resetForLoad(url, startAt: seconds)
         if startsPaused {
             state.isPaused = true
@@ -490,10 +501,20 @@ final class MPVPlayerEngine: @unchecked Sendable {
     }
 
     func togglePause() {
-        command(["cycle", "pause"])
+        if isAtEnd {
+            setPaused(false)
+        } else {
+            command(["cycle", "pause"])
+        }
     }
 
+    /// Playing a file `keep-open` is holding on its last frame starts it over,
+    /// since mpv would otherwise just pause again at the end.
     func setPaused(_ paused: Bool) {
+        if !paused, isAtEnd {
+            isAtEnd = false
+            seek(to: 0)
+        }
         setFlag(property: "pause", value: paused)
     }
 
