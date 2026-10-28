@@ -42,8 +42,12 @@ struct OwlApp: App {
         libraryPlayer = LibraryPlayerWindow(appModel: appModel)
     }
 
+    static let libraryWindowID = "library"
+
     var body: some Scene {
-        WindowGroup("Owl") {
+        // A `Window` rather than a `WindowGroup`: there is only ever one folder
+        // window, and asking for it again raises it rather than adding a second.
+        Window("Owl", id: Self.libraryWindowID) {
             ContentView(appModel: appModel, library: library, player: libraryPlayer)
                 .frame(minWidth: 720, minHeight: 560)
                 .background {
@@ -55,7 +59,7 @@ struct OwlApp: App {
         }
         .defaultSize(width: 1_080, height: 760)
         .windowStyle(.hiddenTitleBar)
-        // A window group answers every file the app is asked to open by opening
+        // A window scene answers every file the app is asked to open by opening
         // one of itself, on top of the folder window already up and beside the
         // window the file is really going to. The files are the delegate's to
         // handle, so this group is told to expect none of them.
@@ -153,7 +157,25 @@ struct FileCommands: Commands {
                 Button("Clear Menu") { recentFiles.clear() }
                     .disabled(recentFiles.urls.isEmpty)
             }
+
+            Divider()
+
+            ShowLibraryMenuItem()
         }
+    }
+}
+
+/// Brings the folder window back once it has been closed, or was never opened
+/// because the app was launched on a single file. `openWindow` is only in
+/// reach from a view, not from the commands themselves.
+private struct ShowLibraryMenuItem: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Show Library") {
+            openWindow(id: OwlApp.libraryWindowID)
+        }
+        .keyboardShortcut("l", modifiers: [.command, .shift])
     }
 }
 
