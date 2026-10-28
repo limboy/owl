@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-10-28
+- Add Show Library (⇧⌘L) to the File menu, to bring back the library window after closing it or after opening a single video from Finder
+- Pressing play after a video has finished starts it again from the beginning
+
 ## [1.9.3] - 2026-10-18
 - Stop showing the time toast when skipping forward or back; the picture moving is enough
 
