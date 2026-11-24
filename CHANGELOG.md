@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-11-24
+- Give the player's control bar a frosted look like QuickTime's, narrower on wide windows, with a white timeline
+
 ## [1.10.0] - 2026-10-28
 - Add Show Library (⇧⌘L) to the File menu, to bring back the library window after closing it or after opening a single video from Finder
 - Pressing play after a video has finished starts it again from the beginning
