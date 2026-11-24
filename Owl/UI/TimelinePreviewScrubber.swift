@@ -72,7 +72,7 @@ struct TimelinePreviewScrubber: View {
                     .fill(Color.white.opacity(0.35))
                     .frame(height: 4)
                 Capsule()
-                    .fill(Color.accentColor)
+                    .fill(Color.white)
                     .frame(width: width * progress, height: 4)
                 chapterMarks(width: width)
                 Circle()

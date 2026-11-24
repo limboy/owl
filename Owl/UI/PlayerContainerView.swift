@@ -132,6 +132,10 @@ struct PlayerContainerView: View {
                         seekValue: $seekValue,
                         openPanel: $openPanel
                     )
+                    // Stretched across a wide window, the buttons at either end
+                    // drift too far apart to read as one bar; past this it
+                    // stays centred along the bottom instead.
+                    .frame(maxWidth: 560)
                     .opacity(controlsVisible ? 1 : 0)
                     .offset(y: controlsVisible ? 0 : 14)
                     .allowsHitTesting(controlsVisible)
@@ -1004,24 +1008,20 @@ extension View {
     /// frame over the timeline. One recipe rather than five copies of it, so
     /// they cannot drift apart.
     ///
-    /// Liquid Glass, tinted dark and drawn in its dark appearance: the text
-    /// and symbols on it are white, and have to stay legible over a bright
-    /// frame as much as over a black one. The glass's own rim all but
-    /// disappears against black — a letterbox, a dark scene — so a light
-    /// line traces it.
+    /// Black and white: a near-solid black, with white text and symbols on
+    /// it, so it reads the same over a bright frame as over a dark one and
+    /// takes on none of the picture's colour. Its edge all but disappears
+    /// against black — a letterbox, a dark scene — so a faint light line
+    /// traces it.
     ///
-    /// The glass and its line are a background, under the panel's contents,
-    /// rather than an effect applied to them: glass draws what it is applied
-    /// to in a layer of its own, and anything rising out of the panel — the
-    /// preview of a frame over the timeline — then had the line across it.
+    /// The fill and its line are a background, under the panel's contents,
+    /// rather than an effect applied to them, so anything rising out of the
+    /// panel — the preview of a frame over the timeline — is drawn over the
+    /// line rather than under it.
     func playerPanel(cornerRadius: CGFloat) -> some View {
         background {
             RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(.clear)
-                .glassEffect(
-                    .regular.tint(.black.opacity(0.35)),
-                    in: RoundedRectangle(cornerRadius: cornerRadius)
-                )
+                .fill(Color.black.opacity(0.92))
                 .overlay {
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
