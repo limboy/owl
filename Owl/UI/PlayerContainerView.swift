@@ -1008,28 +1008,50 @@ extension View {
     /// frame over the timeline. One recipe rather than five copies of it, so
     /// they cannot drift apart.
     ///
-    /// Black and white: a near-solid black, with white text and symbols on
-    /// it, so it reads the same over a bright frame as over a dark one and
-    /// takes on none of the picture's colour. Its edge all but disappears
+    /// Frosted, as QuickTime's controls are: the picture behind it blurred
+    /// heavily but kept to its own tone and colour, with white text and
+    /// symbols on it, blurring whatever is behind it — subtitles low in the
+    /// frame — out of the way of the controls. Its edge all but disappears
     /// against black — a letterbox, a dark scene — so a faint light line
     /// traces it.
     ///
-    /// The fill and its line are a background, under the panel's contents,
-    /// rather than an effect applied to them, so anything rising out of the
-    /// panel — the preview of a frame over the timeline — is drawn over the
-    /// line rather than under it.
+    /// The backdrop and its line are a background, under the panel's
+    /// contents, so anything rising out of the panel — the preview of a frame
+    /// over the timeline — is drawn over the line rather than under it.
     func playerPanel(cornerRadius: CGFloat) -> some View {
         background {
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(Color.black.opacity(0.92))
+            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            PlayerPanelBackdrop()
+                // The material alone darkens the picture to about three
+                // quarters of its brightness; a faint white lifts it back, so
+                // the panel keeps the picture's own tone and colour, only
+                // blurred, as QuickTime's controls do.
+                .overlay(Color.white.opacity(0.1))
+                .clipShape(shape)
                 .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+                    shape.strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
                 }
                 .environment(\.colorScheme, .dark)
                 .allowsHitTesting(false)
         }
     }
+}
+
+/// The frosted backdrop of `playerPanel`: AppKit's HUD material, blurring
+/// what is behind it in the window — the picture — rather than what is
+/// behind the window, and always in its active, dark appearance, so it looks
+/// the same in a window that is not key.
+private struct PlayerPanelBackdrop: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .withinWindow
+        view.state = .active
+        view.appearance = NSAppearance(named: .darkAqua)
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
 /// Tells when the pointer comes into the window and leaves it, from anywhere
